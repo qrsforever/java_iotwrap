@@ -32,7 +32,6 @@ int IOTClientJNI::connect()
     sp<IServiceManager> sm = defaultServiceManager();
     sp<IBinder> binder;
 
-    ALOGI("--------------__%d", __LINE__);
     /* wait iot service start, try 5 times */
     for (int i = 0; i < 5; ++i) {
         binder = sm->getService(String16(IOT_SERVICE_NAME));
@@ -42,14 +41,12 @@ int IOTClientJNI::connect()
         }
         break;
     }
-    ALOGI("--------------__%d", __LINE__);
     if(binder == 0) {
         ALOGE("sm->getService(%s) error!\n", IOT_SERVICE_NAME);
         return -1;
     }
     sp<IIOTService> service = interface_cast<IIOTService>(binder);
 
-    ALOGI("--------------__%d", __LINE__);
     /* iot service die, call serviceDied for reconnect */
     class DeathObserver : public IBinder::DeathRecipient {
         IOTClientJNI& m_client;
@@ -61,16 +58,12 @@ int IOTClientJNI::connect()
         DeathObserver(IOTClientJNI& c) : m_client(c) { }
     };
     m_listen = new DeathObserver(*const_cast<IOTClientJNI *>(this));
-    ALOGI("--------------__%d", __LINE__);
     IInterface::asBinder(service)->linkToDeath(m_listen);
 
     m_proxy = service->createClient();
 
-    ALOGI("--------------__%d", __LINE__);
     m_proxy->registControlCB(m_controlCB);
-    ALOGI("--------------__%d", __LINE__);
     m_proxy->registPropertyCB(m_propertyCB);
-    ALOGI("--------------__%d", __LINE__);
     return 0;
 }
 

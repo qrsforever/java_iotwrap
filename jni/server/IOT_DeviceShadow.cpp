@@ -6,11 +6,6 @@
 #include <stdarg.h>
 #include <unistd.h>
 
-extern "C" {
-#include "iot_export.h"
-#include "iot_import.h"
-}
-
 #define PRODUCT_KEY                 "38GBCH2FO2"
 #define DEVICE_NAME                 "testshadow"
 #define DEVICE_SECRET               "123456"
@@ -26,51 +21,199 @@ static char sg_key_file[128];
         HAL_Printf("%s", "\r\n"); \
     } while(0)
 
-extern  "C" {/*{{{*/
-static void _device_shadow_cb_light(iotx_shadow_attr_pt pattr)
+extern "C" {
+
+static void _DS_call_common_property_cb(iotx_shadow_attr_pt pattr)
 {
-    SHADOW_TRACE("----");
-    SHADOW_TRACE("Attrbute Name: '%s'", pattr->pattr_name);
-    SHADOW_TRACE("Attrbute Value: %d", *(int32_t *)pattr->pattr_data);
-    SHADOW_TRACE("----");
-    // DeviceShadow::self().callPropertySet("light", "1");
+    android::DeviceShadow::get().callPropertySet(pattr->pattr_name, "1");
 }
 
-static void _device_shadow_control_cb(void* handle, const char *data, size_t data_len)
+static void _DS_call_common_control_cb(void* handle, const char *data, size_t data_len)
 {
-    SHADOW_TRACE("data[%s]", data);
-    // DeviceShadow::self().callControlCB(data, data_len);
+    android::DeviceShadow::get().callControlCB(data, data_len);
 }
 
-} /* end extern "C" *//*}}}*/
-
-/*
-    attr_light.attr_type = IOTX_SHADOW_INT32;
-    attr_light.mode = IOTX_SHADOW_RW;
-    attr_light.pattr_name = "switch";
-    attr_light.pattr_data = &light;
-    attr_light.callback = _device_shadow_cb_light;
-
-static iotx_shadow_attr_t[] {
-    {.pattr_name = "signalsource", IOTX_SHADOW_RW, "},
 }
-*/
-static int demo_device_shadow(char *msg_buf, char *msg_readbuf)
-{
-    char buf[1024];
+
+namespace android {
+
+ANDROID_SINGLETON_STATIC_INSTANCE(DeviceShadow);
+
+
+DeviceShadow::DeviceShadow()
+    : m_shadow(0), m_thread(0)
+{/*{{{*/
+    m_thread = new IOTThread(this);
+
+    /* 1. default attr value */
+    static int32_t power = 1;
+    static int32_t brightness = 50;
+    static int32_t signal = 1;
+
+    /* 2. add property to map */
+    _addProperty("power",      &power,      IOTX_SHADOW_INT32, IOTX_SHADOW_RW, _DS_call_common_property_cb);
+    _addProperty("brightness", &brightness, IOTX_SHADOW_INT32, IOTX_SHADOW_RW, _DS_call_common_property_cb);
+    _addProperty("signal",     &signal,     IOTX_SHADOW_INT32, IOTX_SHADOW_RW, _DS_call_common_property_cb);
+
+}/*}}}*/
+
+DeviceShadow::~DeviceShadow()
+{/*{{{*/
+    m_thread.clear();
+
+    /* TODO release m_iotAttrs */
+}/*}}}*/
+
+int DeviceShadow::doReportEvent(const char* msg, size_t size)
+{/*{{{*/
+    if (!msg || size == 0)
+        return -1;
+    return IOT_Shadow_Event_Report(m_shadow, (char*)msg, size);
+}/*}}}*/
+
+int DeviceShadow::doReportProperty(const char *key, const char *val)
+{/*{{{*/
+    if (!key || !val)
+        return -1;
+    Mutex::Autolock _l(m_lockAttrs);
+
+    IterAttrs_t it = m_iotAttrs.find(key);
+    if (it == m_iotAttrs.end())
+        return -1;
+
+    it->second.report = 1;
+    iotx_shadow_attr_pt attr = it->second.attr;
+    switch(attr->attr_type) {
+    case IOTX_SHADOW_INT32:
+        *(int32_t*)attr->pattr_data = atoi(val);
+        break;
+
+    case IOTX_SHADOW_STRING:
+        strncpy((char*)attr->pattr_data, val, strlen(val));
+        break;
+    default:
+        ;
+    }
+    return 0;
+}/*}}}*/
+
+int DeviceShadow::_addProperty(const char *name, void *data, int type, int mode, iotx_shadow_attr_cb_t cb)
+{/*{{{*/
+    if (!name || !data)
+        return -1;
+
+    IterAttrs_t it = m_iotAttrs.find(name);
+    if (it != m_iotAttrs.end())
+        return -1;
+
+    iotx_shadow_attr_pt attr = (iotx_shadow_attr_pt)calloc(1, sizeof(iotx_shadow_attr_t));
+    if (!attr)
+        return -1;
+
+    char *pname = (char*)calloc(strlen(name) + 1, 1);
+    if (!pname) {
+        free(attr);
+        return -1;
+    }
+    strcpy(pname, name);
+
+    attr->pattr_name = pname;
+    attr->pattr_data = data;
+    attr->attr_type = (iotx_shadow_attr_datatype_t)type;
+    attr->mode = (iotx_shadow_datamode_t)mode;
+    attr->callback = cb;
+
+    m_iotAttrs.insert(std::pair<std::string, _DS_Attr>(name, _DS_Attr(0, attr)));
+    return 0;
+}/*}}}*/
+
+int DeviceShadow::loadProperties()
+{/*{{{*/
+    Mutex::Autolock _l(m_lockAttrs);
+
+    int ret = -1;
+    IterAttrs_t it;
+    for (it = m_iotAttrs.begin(); it != m_iotAttrs.end(); ++it) {
+        _DS_Attr &ds_attr = it->second;
+        iotx_shadow_attr_pt attr = ds_attr.attr;
+        if (attr) {
+            switch(attr->attr_type) {
+            case IOTX_SHADOW_INT32:
+                {
+                    char value[32] = { 0 };
+                    ret = callPropertyGet(attr->pattr_name, value, 32);
+                    if (ret > 0) {
+                        int32_t told = *(int32_t*)attr->pattr_data;
+                        int32_t tnew = atoi(value);
+                        if (told != tnew) {
+                            ds_attr.report = 1;
+                            *(int32_t*)attr->pattr_data = tnew;
+                        }
+                    }
+                }
+                break;
+
+            case IOTX_SHADOW_STRING:
+                {
+                    char value[ATTR_VALUE_MAX_LEN] = { 0 };
+                    ret = callPropertyGet(attr->pattr_name, value, ATTR_VALUE_MAX_LEN);
+                    if (ret > 0) {
+                        /* TODO compare strlen length */
+                        char *told = (char*)attr->pattr_data;
+                        char *tnew = value;
+                        if (strcmp(told, tnew)) {
+                            ds_attr.report = 1;
+                            strncpy((char*)attr->pattr_data, tnew, ret);
+                        }
+                    }
+                }
+                break;
+            default:
+                continue;
+            }
+        }
+    }
+    return 0;
+}/*}}}*/
+
+int DeviceShadow::pushProperties()
+{/*{{{*/
+    Mutex::Autolock _l(m_lockAttrs);
+
+    int ret = 0, flg = 0;
+    static char s_buff[PAYLOAD_MAX_LEN] = { 0 };
+    format_data_t format;                                              
+
+    IterAttrs_t it;
+    for (it = m_iotAttrs.begin(); it != m_iotAttrs.end(); ++it) {
+        _DS_Attr &ds_attr = it->second;
+        if (ds_attr.report) {
+            if (0 == flg)
+                 IOT_Shadow_PushFormat_Init(m_shadow, &format, s_buff, PAYLOAD_MAX_LEN);
+            IOT_Shadow_PushFormat_Add(m_shadow, &format, ds_attr.attr);   
+            ds_attr.report = 0;
+        }
+    }
+    if (1 == flg) {
+        IOT_Shadow_PushFormat_Finalize(m_shadow, &format);                 
+        ret = IOT_Shadow_Push(m_shadow, format.buf, format.offset, YIELD_TIMEOUT_MS);    
+    }
+    return ret;
+}/*}}}*/
+
+int DeviceShadow::setupShadow(char *w_buff, char *r_buff)
+{/*{{{*/
     int rc;
     iotx_conn_info_pt puser_info;
     void *h_shadow;
     iotx_shadow_para_t shadow_para;
 
-    /* Device AUTH */
     rc = IOT_SetupConnInfo(PRODUCT_KEY, DEVICE_NAME, DEVICE_SECRET, (void **)&puser_info);
     if (SUCCESS_RETURN != rc) {
         SHADOW_TRACE("rc = IOT_SetupConnInfo() = %d", rc);
         return rc;
     }
 
-    /* Construct a device shadow */
     memset(&shadow_para, 0, sizeof(iotx_shadow_para_t));
 
     sprintf(sg_cert_file, "/data/certs/%s_cert.crt", DEVICE_NAME);
@@ -88,9 +231,9 @@ static int demo_device_shadow(char *msg_buf, char *msg_readbuf)
     shadow_para.mqtt.request_timeout_ms = 2000;
     shadow_para.mqtt.clean_session = 0;
     shadow_para.mqtt.keepalive_interval_ms = 60000;
-    shadow_para.mqtt.pread_buf = msg_readbuf;
+    shadow_para.mqtt.pread_buf = r_buff;
     shadow_para.mqtt.read_buf_size = SHADOW_MQTT_MSGLEN;
-    shadow_para.mqtt.pwrite_buf = msg_buf;
+    shadow_para.mqtt.pwrite_buf = w_buff;
     shadow_para.mqtt.write_buf_size = SHADOW_MQTT_MSGLEN;
 
     shadow_para.mqtt.handle_event.h_fp = NULL;
@@ -101,130 +244,97 @@ static int demo_device_shadow(char *msg_buf, char *msg_readbuf)
         SHADOW_TRACE("construct device shadow failed!");
         return rc;
     }
+    m_shadow = h_shadow;
+    return 0;
+}/*}}}*/
 
-    android::DeviceShadow::get().m_shadow = h_shadow;
-
-    /* Define and add two attribute */
-
-    int32_t light = 1000, temperature = 1001;
-    iotx_shadow_attr_t attr_light, attr_temperature;
-
-    memset(&attr_light, 0, sizeof(iotx_shadow_attr_t));
-    memset(&attr_temperature, 0, sizeof(iotx_shadow_attr_t));
-
-    /* Initialize the @light attribute */
-    attr_light.attr_type = IOTX_SHADOW_INT32;
-    attr_light.mode = IOTX_SHADOW_RW;
-    attr_light.pattr_name = "switch";
-    attr_light.pattr_data = &light;
-    attr_light.callback = _device_shadow_cb_light;
-
-    /* Initialize the @temperature attribute */
-    attr_temperature.attr_type = IOTX_SHADOW_INT32;
-    attr_temperature.mode = IOTX_SHADOW_READONLY;
-    attr_temperature.pattr_name = "temperature";
-    attr_temperature.pattr_data = &temperature;
-    attr_temperature.callback = NULL;
-
-    /* Register the attribute */
-    /* Note that you must register the attribute you want to synchronize with cloud
-     * before calling IOT_Shadow_Pull() */
-    IOT_Shadow_RegisterAttribute(h_shadow, &attr_light);
-    IOT_Shadow_RegisterAttribute(h_shadow, &attr_temperature);
-
-    IOT_Shadow_Control_Register(h_shadow, _device_shadow_control_cb);
-
-    /* synchronize the device shadow with device shadow cloud */
-    IOT_Shadow_Pull(h_shadow);
-
-    int i = 0;
-    int ret = 0;
-    int report_flag = 1;
-    do {
-        if (report_flag || (i % 11) == 0) {
-            format_data_t format;
-            /* Format the attribute data */
-            IOT_Shadow_PushFormat_Init(h_shadow, &format, buf, 1024);
-            IOT_Shadow_PushFormat_Add(h_shadow, &format, &attr_temperature);
-            IOT_Shadow_PushFormat_Add(h_shadow, &format, &attr_light);
-            IOT_Shadow_PushFormat_Finalize(h_shadow, &format);
-
-            /* Update attribute data */
-            ret = IOT_Shadow_Push(h_shadow, format.buf, format.offset, 10);
-            if (ret == SUCCESS_RETURN) {
-                report_flag = 0;
-            }
+int DeviceShadow::preShadow()
+{/*{{{*/
+    /* 1. register attrs to iotsdk */
+    IterAttrs_t it;
+    for (it = m_iotAttrs.begin(); it != m_iotAttrs.end(); ++it) {
+        _DS_Attr &ds_attr = it->second;
+        if (ds_attr.attr) {
+            IOT_Shadow_RegisterAttribute(m_shadow, ds_attr.attr);
+            SHADOW_TRACE("Register attr[%s]", ds_attr.attr->pattr_name);
         }
-        i++;
+    }
 
-        IOT_Shadow_Yield(h_shadow, 200);
+    /* 2. register control to iotsdk */
+    IOT_Shadow_Control_Register(m_shadow, _DS_call_common_control_cb);
 
-    } while (1);
+    /* 3. wait the first client create */
+    waitForClient();
 
-    IOT_Shadow_DeleteAttribute(h_shadow, &attr_temperature);
-    IOT_Shadow_DeleteAttribute(h_shadow, &attr_light);
-
-    IOT_Shadow_Destroy(h_shadow);
-
+    /* 4. sync attrs from iotcloud */
+    IOT_Shadow_Pull(m_shadow);
     return 0;
-}
+}/*}}}*/
 
-namespace android {
+int DeviceShadow::postShadow()
+{/*{{{*/
+    /* 1. delete attrs from qcloud */
+    IterAttrs_t it;
+    for (it = m_iotAttrs.begin(); it != m_iotAttrs.end(); ++it) {
+        _DS_Attr &ds_attr = it->second;
+        if (ds_attr.attr) {
+            SHADOW_TRACE("Delete attr[%s]", ds_attr.attr->pattr_name);
+            IOT_Shadow_DeleteAttribute(m_shadow, ds_attr.attr);
+        }
+    }
 
-ANDROID_SINGLETON_STATIC_INSTANCE(DeviceShadow);
-
-
-struct _DS_Attributes {
-    int signalSource;
-
-    int volumn;
-    char bgColor[16];
-} g_Attrs;
-
-static std::map<std::string, iotx_shadow_attr_pt> m_iotAttrs;
-
-DeviceShadow::DeviceShadow()
-    : m_shadow(0), m_thread(0)
-    , m_reportFlag(false)
-{
-    m_thread = new IOTThread(this);
-
-    // m_iotAttrs.insert(std::pair<std::string, 
-}
-
-DeviceShadow::~DeviceShadow()
-{
-    m_thread.clear();
-}
-
-int DeviceShadow::doReportEvent(const char* msg, size_t size)
-{
+    IOT_Shadow_Destroy(m_shadow);
+    m_shadow = 0;
     return 0;
-}
+}/*}}}*/
 
-int DeviceShadow::doReportProperty(const char *key, const char *val)
+int DeviceShadow::yieldShadow(int timeout_ms)
 {
-    m_reportFlag = true;
+    IOT_Shadow_Yield(m_shadow, timeout_ms);
     return 0;
 }
 
 bool DeviceShadow::IOTThread::threadLoop()
-{
+{/*{{{*/
     IOT_OpenLog("shadow");
     IOT_SetLogLevel(IOT_LOG_DEBUG);
+    int ret;
 
-    char *msg_buf = (char *)HAL_Malloc(SHADOW_MQTT_MSGLEN);
-    char *msg_readbuf = (char *)HAL_Malloc(SHADOW_MQTT_MSGLEN);
+    const uint32_t up_timeout_ms = 300000;
+    uint64_t empired_ms = 0;
+    char *w_buff = (char *)HAL_Malloc(SHADOW_MQTT_MSGLEN);
+    char *r_buff = (char *)HAL_Malloc(SHADOW_MQTT_MSGLEN);
 
-    demo_device_shadow(msg_buf, msg_readbuf);
+    ret = m_service->setupShadow(w_buff, r_buff);
+    if (ret < 0) {
+        SHADOW_TRACE("error!");
+        goto END;
+    }
+    m_service->preShadow();
 
-    HAL_Free(msg_buf);
-    HAL_Free(msg_readbuf);
+    empired_ms = HAL_UptimeMs() + up_timeout_ms;
+    do {
+
+        m_service->yieldShadow(YIELD_TIMEOUT_MS);
+        if (HAL_UptimeMs() > empired_ms) {
+            m_service->loadProperties();
+            empired_ms = HAL_UptimeMs() + up_timeout_ms;
+        }
+        m_service->pushProperties();
+
+    } while (isRunning());
+
+    /* TODO never run here ! */
+    m_service->postShadow();
+
+END:
+    HAL_Free(w_buff);
+    HAL_Free(r_buff);
 
     SHADOW_TRACE("out of demo!");
     IOT_DumpMemoryStats(IOT_LOG_DEBUG);
     IOT_CloseLog();
     return false;
-}
+}/*}}}*/
 
 } /* end namespace android */

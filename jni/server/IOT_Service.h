@@ -7,8 +7,13 @@
 
 #include <utils/Vector.h>
 #include <utils/Mutex.h>
+#include <utils/Condition.h> 
 
 #define MAX_CLINETS 10
+
+#define ALOGI  printf
+#define ALOGW  printf
+#define ALOGE  printf
 
 namespace android {
 
@@ -16,8 +21,10 @@ class IOTService : public BnIOTService, public IBinder::DeathRecipient {
 public:
     IOTService ();
     ~IOTService ();
+
     virtual int doReportEvent(const char *msg, size_t size) = 0;
     virtual int doReportProperty(const char *key, const char *val) = 0;
+
     int callControlCB(const char *data, size_t size);
     int callPropertyGet(const char *key, char *val, size_t size);
     int callPropertySet(const char *key, const char *val);
@@ -28,6 +35,11 @@ protected:
     /* Interfaces of IIOTService */
     sp<IIOTClient> createClient();
     int deleteClient(const sp<IIOTClient> &client);
+
+    /* for parent class */
+    void waitForClient();
+    void clientActive();
+    Condition m_condition;  
 
 private:
     class IOTClient : public BnIOTClient {
@@ -49,8 +61,8 @@ private:
         sp<IIOTPropertyCB> m_property;
     };
 
-    Vector<sp<IOTClient>> m_clients;
-    mutable Mutex m_lock;
+    Vector< sp<IOTClient> > m_clients;
+    Mutex m_lock;
 };
 
 } /* end namespace android */

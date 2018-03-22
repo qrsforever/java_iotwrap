@@ -45,7 +45,7 @@ int IOTService::callPropertyGet(const char *key, char *val, size_t size)
         memcpy(val, str.string(), len);
         break;
     }
-    return ret;
+    return len;
 }
 
 int IOTService::callPropertySet(const char *key, const char *val)
@@ -84,7 +84,7 @@ sp<IIOTClient> IOTService::createClient()
 
 void IOTService::binderDied(const wp<IBinder>& cli)
 {
-    ALOGW("IOTService binderDied [%p]", cli.unsafe_get());
+    ALOGW("IOTService binderDied [%p]\n", cli.unsafe_get());
     Mutex::Autolock _l(m_lock);
     for (size_t i = 0; i < m_clients.size(); ++i) {
         if (m_clients[i].get() == cli.unsafe_get()) {
@@ -93,6 +93,20 @@ void IOTService::binderDied(const wp<IBinder>& cli)
             return;
         }
     }
+}
+
+void IOTService::waitForClient()
+{
+    ALOGI("waitForClient()\n");
+    Mutex::Autolock _l(m_lock);
+    m_condition.wait(m_lock);
+}
+
+void IOTService::clientActive()
+{
+    ALOGI("clientActive()\n");
+    Mutex::Autolock _l(m_lock);
+    m_condition.signal();
 }
 
 int IOTService::IOTClient::reportEvent(String8 &msg)
@@ -116,6 +130,7 @@ int IOTService::IOTClient::registPropertyCB(const sp<IIOTPropertyCB> &proCB)
 {
     m_property = proCB;
     IInterface::asBinder(m_property)->linkToDeath(m_service);
+    m_service->clientActive();
     return 0;
 }
 
