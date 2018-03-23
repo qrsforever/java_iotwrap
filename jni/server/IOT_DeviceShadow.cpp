@@ -26,8 +26,20 @@ extern "C" {
 static void _DS_call_default_property_cb(iotx_shadow_attr_pt pattr)
 {
     SHADOW_TRACE(" _DS_call_default_property_cb (%s)", pattr->pattr_name);
+
     char value[ATTR_VALUE_MAX_LEN];
-    HAL_Snprintf(value, ATTR_VALUE_MAX_LEN, "%s", (char*)pattr->pattr_data);
+    switch(pattr->attr_type) {
+    case IOTX_SHADOW_INT32:
+        HAL_Snprintf(value, ATTR_VALUE_MAX_LEN, "%d", *(int32_t*)pattr->pattr_data);
+        break;
+
+    case IOTX_SHADOW_STRING:
+        HAL_Snprintf(value, ATTR_VALUE_MAX_LEN, "%s", (char*)pattr->pattr_data);
+        break;
+    default:
+        return;
+    }
+
     android::DeviceShadow::get().callPropertySet(pattr->pattr_name, value);
 }
 
@@ -50,6 +62,7 @@ DeviceShadow::DeviceShadow()
 {/*{{{*/
     m_thread = new IOTThread(this);
 
+    // static add
     // _addProperty("power",      IOTX_SHADOW_INT32, sizeof(int32_t), _DS_call_default_property_cb);
     // _addProperty("brightness", IOTX_SHADOW_INT32, sizeof(int32_t), _DS_call_default_property_cb);
     // _addProperty("signal",     IOTX_SHADOW_INT32, sizeof(int32_t), _DS_call_default_property_cb);
@@ -277,7 +290,10 @@ int DeviceShadow::setupShadow(char *w_buff, char *r_buff)
 
 int DeviceShadow::preShadow()
 {/*{{{*/
-    /* 1. register attrs to iotsdk */
+    /* 1. wait the first client create */
+    waitForClient();
+
+    /* 2. register attrs to iotsdk */
     IterAttrs_t it;
     for (it = m_iotAttrs.begin(); it != m_iotAttrs.end(); ++it) {
         _DS_Attr &ds_attr = it->second;
@@ -287,11 +303,8 @@ int DeviceShadow::preShadow()
         }
     }
 
-    /* 2. register control to iotsdk */
+    /* 3. register control to iotsdk */
     IOT_Shadow_Control_Register(m_shadow, _DS_call_default_command_cb);
-
-    /* 3. wait the first client create */
-    waitForClient();
 
     /* 4. sync attrs from iotcloud */
     IOT_Shadow_Pull(m_shadow);

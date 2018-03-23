@@ -11,7 +11,7 @@ static void __native_init(JNIEnv *env)
     ALOGI("__native_init\n");
 }
 
-static void __native_setup(JNIEnv *env, jobject thiz, jobject refObj)
+static void __native_setup(JNIEnv *env, jobject thiz, jobject refObj, jstring clientID)
 {
     ALOGI("__native_setup\n");
     jclass clazz = env->GetObjectClass(thiz);
@@ -19,12 +19,17 @@ static void __native_setup(JNIEnv *env, jobject thiz, jobject refObj)
         ALOGE("Can't find %s\n", kClassPathName);
         return;
     }
-    IOTClientJNI::get().init(env, clazz, refObj);
+    IOTClientJNI::get().init(env, clazz, refObj, clientID);
 }
 
-static void __native_commit(JNIEnv *env, jobject thiz)
+static jint __native_connService(JNIEnv *env, jobject thiz)
 {
-    IOTClientJNI::get().commit();
+    return IOTClientJNI::get().connService();
+}
+
+static jint __native_postFollow(JNIEnv *env, jobject thiz)
+{
+    return IOTClientJNI::get().postFollow();
 }
 
 static jint __native_followProperty(JNIEnv *env, jobject thiz, jstring property, jint type, jint size)
@@ -48,9 +53,26 @@ static jint __native_reportProperty(JNIEnv *env, jobject thiz, jstring key, jstr
 }
 
 static JNINativeMethod gMethods[] = {
-    { "native_init",            "()V",                            (void *)__native_init },
-    { "native_setup",           "(Ljava/lang/Object;)V",          (void *)__native_setup },
-    { "native_commit",          "()V",                            (void *)__native_commit },
+    {
+        "native_init",
+        "()V",
+        (void *)__native_init
+    },
+    {
+        "native_setup",
+        "(Ljava/lang/Object;Ljava/lang/String;)V",
+        (void *)__native_setup
+    },
+    {
+        "native_connService",
+        "()I",
+        (void *)__native_connService
+    },
+    {
+        "native_postFollow",
+        "()I",
+        (void *)__native_postFollow
+    },
     {
         "native_followProperty",
         "(Ljava/lang/String;II)I",

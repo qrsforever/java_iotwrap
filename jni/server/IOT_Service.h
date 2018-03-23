@@ -13,10 +13,6 @@
 
 #define MAX_CLINETS 10
 
-#define ALOGI  printf
-#define ALOGW  printf
-#define ALOGE  printf
-
 enum {
     FOLLOW_TYPE_PROPERTY = 0,
     FOLLOW_TYPE_COMMAND,

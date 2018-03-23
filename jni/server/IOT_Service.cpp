@@ -11,6 +11,25 @@ IOTService::IOTService ()
 
 IOTService::~IOTService ()
 {
+    /* TODO never run here, release resource */
+    IterFollow keyit = m_keyFollow.begin();
+    for (; keyit != m_keyFollow.end(); ++keyit) {
+        if (keyit->second) {
+            keyit->second->clear();
+            delete keyit->second;
+        }
+    }
+    m_keyFollow.clear();
+
+    IterFollow cmdit = m_cmdFollow.begin();
+    for (; cmdit != m_cmdFollow.end(); ++cmdit) {
+        if (cmdit->second) {
+            cmdit->second->clear();
+            delete cmdit->second;
+        }
+    }
+    m_cmdFollow.clear();
+
     m_clients.clear();
 }
 
@@ -23,7 +42,12 @@ int IOTService::callCommandCB(const char *cmd, const char* data)
     IterFollow it = m_cmdFollow.find(cmd);
     if (it == m_cmdFollow.end()) {
         /* TODO */
-        ALOGW("TODO callPropertyGet\n");
+        ALOGW("TODO callCommandCB, if no following, just using the first client.\n");
+        if (m_clients.size() > 0 && m_clients[0] != NULL) {
+            if (m_clients[0]->m_command != NULL)
+                m_clients[0]->m_command->callback(String8(cmd), String8(data));
+            return 0;
+        }
         return -1;
     }
     Vector<sp<IOTClient>> *v_clients = it->second;
@@ -33,7 +57,7 @@ int IOTService::callCommandCB(const char *cmd, const char* data)
     for (size_t i = 0; i < v_clients->size(); ++i) {
         if ((*v_clients)[i]->m_command == NULL)
             continue;
-        (*v_clients)[i]->m_command->callback(String8(data));
+        (*v_clients)[i]->m_command->callback(String8(cmd), String8(data));
     }
     return 0;
 }
@@ -45,18 +69,30 @@ int IOTService::callPropertyGet(const char *key, char *val, size_t size)
 
     Mutex::Autolock _l(m_lockClis);
 
+    size_t len = 0;
+    String8 str;
     IterFollow it = m_keyFollow.find(key);
     if (it == m_keyFollow.end()) {
         /* TODO */
-        ALOGW("TODO callPropertyGet\n");
+        ALOGW("TODO callPropertyGet, if no following, just using the first client.\n");
+        if (m_clients.size() > 0 && m_clients[0] != NULL) {
+            if (m_clients[0]->m_property != NULL) {
+                m_clients[0]->m_property->get(String8(key), str);
+                len = str.length();
+                if (len > 0) {
+                    if (len > size) {
+                        len = size;
+                    }
+                    memcpy(val, str.string(), len);
+                }
+            }
+            return 0;
+        }
         return -1;
     }
     Vector<sp<IOTClient>> *v_clients = it->second;
     if (!v_clients)
         return -1;
-
-    size_t len = 0;
-    String8 str;
 
     /* TODO only the first return, then terminate */
     for (size_t i = 0; i < v_clients->size(); ++i) {
@@ -81,10 +117,16 @@ int IOTService::callPropertySet(const char *key, const char *val)
 
     Mutex::Autolock _l(m_lockClis);
 
+    ALOGI("callPropertySet(%s %s)\n", key, val);
     IterFollow it = m_keyFollow.find(key);
     if (it == m_keyFollow.end()) {
         /* TODO */
-        ALOGW("TODO callPropertySet\n");
+        ALOGW("TODO callPropertySet, if no following, just using the first client.\n");
+        if (m_clients.size() > 0 && m_clients[0] != NULL) {
+            if (m_clients[0]->m_property != NULL)
+                m_clients[0]->m_property->set(String8(key), String8(val));
+            return 0;
+        }
         return -1;
     }
     Vector<sp<IOTClient>> *v_clients = it->second;
@@ -94,6 +136,8 @@ int IOTService::callPropertySet(const char *key, const char *val)
     for (size_t i = 0; i < v_clients->size(); ++i) {
         if ((*v_clients)[i]->m_property == NULL)
             continue;
+
+        ALOGI("m_property(%s %s)\n", key, val);
         (*v_clients)[i]->m_property->set(String8(key), String8(val));
     }
     return 0;

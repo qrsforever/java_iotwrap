@@ -12,9 +12,10 @@ public:
     BpIOTCommandCB(const sp<IBinder>& impl)
         : BpInterface<IIOTCommandCB>(impl) { }
 
-    virtual int callback(String8 const &msg) const {
+    virtual int callback(String8 const &cmd, String8 const &msg) const {
         Parcel data, reply;
         data.writeInterfaceToken(IIOTCommandCB::getInterfaceDescriptor());
+        data.writeString8(cmd);
         data.writeString8(msg);
         int status = remote()->transact(IOTACTION_COMMAND_CALLBACK, data, &reply);
         if (status != 0) {
@@ -34,8 +35,9 @@ status_t BnIOTCommandCB::onTransact(uint32_t code, const Parcel &data, Parcel *r
     switch (code) {
     case IOTACTION_COMMAND_CALLBACK: {
             CHECK_INTERFACE(IIOTCommandCB, data, reply);
+            String8 cmd = data.readString8();
             String8 msg = data.readString8();
-            ret = callback(msg);
+            ret = callback(cmd, msg);
             reply->writeInt32(ret);
         }
         break;

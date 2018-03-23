@@ -20,17 +20,32 @@ IOTClientJNI::~IOTClientJNI()
     m_listen.clear();
 }
 
-int IOTClientJNI::init(JNIEnv* env, jclass clazz, jobject thiz)
+int IOTClientJNI::init(JNIEnv* env, jclass clazz, jobject thiz, jstring &clientID)
 {
-    m_commandCB = new IOTCommandCB(env, clazz, thiz);
+    m_clientID = JStringToString8(clientID);
     m_propertyCB = new IOTPropertyCB(env, clazz, thiz);
+    m_commandCB = new IOTCommandCB(env, clazz, thiz);
+    return 0;
+}
+
+int IOTClientJNI::connService()
+{
+    if (m_proxy != NULL) {
+        ALOGW(" Already connect!\n");
+        return 0;
+    }
     return connect();
 }
 
-void IOTClientJNI::commit()
+int IOTClientJNI::postFollow()
 {
+    if (m_proxy == NULL) {
+        ALOGE(" Client proxy is null.\n");
+        return -1;
+    }
     m_proxy->registCommandCB(m_commandCB);
     m_proxy->registPropertyCB(m_propertyCB);
+    return 0;
 }
 
 int IOTClientJNI::connect()
@@ -47,7 +62,7 @@ int IOTClientJNI::connect()
         }
         break;
     }
-    if(binder == 0) {
+    if(binder == NULL) {
         ALOGE("sm->getService(%s) error!\n", IOT_SERVICE_NAME);
         return -1;
     }
@@ -66,8 +81,8 @@ int IOTClientJNI::connect()
     m_listen = new DeathObserver(*const_cast<IOTClientJNI *>(this));
     IInterface::asBinder(service)->linkToDeath(m_listen);
 
-    m_proxy = service->createClient(String8("todo"));
-    return 0;
+    m_proxy = service->createClient(m_clientID);
+    return m_proxy == NULL ? -1 : 0;
 }
 
 void IOTClientJNI::serviceDied()

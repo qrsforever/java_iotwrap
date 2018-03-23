@@ -12,7 +12,7 @@ IOTCommandCB::IOTCommandCB(JNIEnv* env, jclass clazz, jobject thiz)
     m_controlCB = env->GetStaticMethodID(
         clazz,
         "_iotCommandCallback",
-        "(Ljava/lang/Object;Ljava/lang/String;)V");
+        "(Ljava/lang/Object;Ljava/lang/String;Ljava/lang/String;)V");
 
     if (!m_controlCB) {
         ALOGE("GetStaticMethodID(iotCommandCallback) error!\n");
@@ -32,15 +32,17 @@ IOTCommandCB::~IOTCommandCB()
     }
 }
 
-int IOTCommandCB::callback(String8 const &msg) const
+int IOTCommandCB::callback(String8 const &cmd, String8 const &msg) const
 {
     ALOGI("callback(%s)\n", msg.string());
     JNIEnv *env = AndroidRuntime::getJNIEnv();
+    jstring jcmd = env->NewStringUTF(cmd.string());
     jstring jmsg = env->NewStringUTF(msg.string());
-    if (jmsg) {
+    if (jmsg && jcmd) {
         env->CallStaticVoidMethod(
             m_class, m_controlCB,
-            m_object, jmsg);
+            m_object, jcmd, jmsg);
+        env->DeleteLocalRef(jcmd);
         env->DeleteLocalRef(jmsg);
         return 0;
     }

@@ -11,7 +11,7 @@ public:
     IOTCommandCB(JNIEnv* env, jclass clazz, jobject thiz);
     ~IOTCommandCB();
 protected:
-    int callback(String8 const &msg) const;
+    int callback(String8 const &cmd, String8 const &msg) const;
 private:
     jclass m_class;
     jobject m_object;

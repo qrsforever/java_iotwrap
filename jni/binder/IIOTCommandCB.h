@@ -12,7 +12,7 @@ namespace android {
 class IIOTCommandCB : public IInterface {
 public:
     DECLARE_META_INTERFACE(IOTCommandCB);
-    virtual int callback(String8 const &msg) const = 0;
+    virtual int callback(String8 const &cmd, String8 const &msg) const = 0;
 };
 
 class BnIOTCommandCB : public BnInterface<IIOTCommandCB> {

@@ -14,6 +14,11 @@
 #define IOT_PROPERTY_INT32  1
 #define IOT_PROPERTY_STRING 2
 
+/* TODO debug */
+#define ALOGI  printf
+#define ALOGW  printf
+#define ALOGE  printf
+
 namespace android {
 
 class IIOTClient : public IInterface {
