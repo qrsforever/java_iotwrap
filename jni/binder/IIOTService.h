@@ -1,10 +1,6 @@
 #ifndef __IIOT_SERVICE_H__
 #define __IIOT_SERVICE_H__
 
-#include <binder/IInterface.h>
-#include <binder/Parcel.h>
-#include <utils/String8.h>
-
 #include "IIOTClient.h"
 
 #define IOT_SERVICE_PACK "com.android.leiot.IIOTService"
@@ -15,7 +11,7 @@ namespace android {
 class IIOTService : public IInterface {
 public:
     DECLARE_META_INTERFACE(IOTService);
-    virtual sp<IIOTClient> createClient() = 0;
+    virtual sp<IIOTClient> createClient(String8 name) = 0;
 };
 
 class BnIOTService : public BnInterface<IIOTService> {

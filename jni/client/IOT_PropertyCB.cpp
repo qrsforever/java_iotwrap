@@ -67,7 +67,7 @@ int IOTPropertyCB::set(String8 const &key, String8 const &val) const
     jstring jval = env->NewStringUTF(val.string());
     if (env && jkey && jval) {
         env->CallStaticVoidMethod(
-            m_class, m_property_get,
+            m_class, m_property_set,
             m_object, jkey, jval);
         env->DeleteLocalRef(jkey);
         env->DeleteLocalRef(jval);

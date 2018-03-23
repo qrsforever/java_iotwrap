@@ -2,8 +2,6 @@
 LOCAL_PATH:= $(call my-dir)
 include $(CLEAR_VARS)
 
-LOCAL_32_BIT_ONLY := true
-
 LOCAL_CFLAGS := -DLOG_TAG=\"IOT_Server\"
 LOCAL_CFLAGS += -DIOT_DEBUG=1
 LOCAL_CFLAGS += -DENABLE_TENCENT_CLOUD
@@ -19,7 +17,7 @@ LOCAL_SRC_FILES :=  \
 	server/IOT_DeviceShadow.cpp \
 	binder/IIOTService.cpp \
 	binder/IIOTClient.cpp \
-	binder/IIOTControlCB.cpp \
+	binder/IIOTCommandCB.cpp \
 	binder/IIOTPropertyCB.cpp 
 
 
@@ -53,11 +51,11 @@ LOCAL_C_INCLUDES += $(LOCAL_PATH) \
 					$(LOCAL_PATH)/client
 
 LOCAL_SRC_FILES:= \
-    binder/IIOTControlCB.cpp \
+    binder/IIOTCommandCB.cpp \
 	binder/IIOTPropertyCB.cpp  \
     binder/IIOTService.cpp \
     binder/IIOTClient.cpp \
-	client/IOT_ControlCB.cpp \
+	client/IOT_CommandCB.cpp \
 	client/IOT_PropertyCB.cpp \
     client/IOT_ClientJNI.cpp \
 	client/IOT_Helper.cpp \

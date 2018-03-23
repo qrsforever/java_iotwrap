@@ -21,12 +21,15 @@ public:
     static inline IOTClientJNI& get() { return getInstance(); }
 
     int init(JNIEnv* env, jclass clazz, jobject thiz);
+    void commit();
 
+    int followProperty(jstring &jkey, jint type, jint size);
+    int followCommand(jstring &cmd);
     int reportEvent(jstring const& msg);
     int reportProperty(jstring const& key, jstring const& val);
 
 private:
-    sp<IIOTControlCB> m_controlCB;
+    sp<IIOTCommandCB> m_commandCB;
     sp<IIOTPropertyCB> m_propertyCB;
     mutable sp<IIOTClient> m_proxy;
     mutable sp<IBinder::DeathRecipient> m_listen;

@@ -5,19 +5,25 @@
 #include <binder/Parcel.h>
 #include <utils/String8.h>
 
-#include "IIOTControlCB.h"
+#include "IIOTCommandCB.h"
 #include "IIOTPropertyCB.h"
 
 #define IOT_CLIENT_PACK "com.android.leiot.IIOTClient"
+
+#define IOT_PROPERTY_NULL   0
+#define IOT_PROPERTY_INT32  1
+#define IOT_PROPERTY_STRING 2
 
 namespace android {
 
 class IIOTClient : public IInterface {
 public:
     DECLARE_META_INTERFACE(IOTClient);
+    virtual int followProperty(String8 &key, int type, int size) = 0;
+    virtual int followCommand(String8 &cmd) = 0;
     virtual int reportEvent(String8 &msg) = 0;
     virtual int reportProperty(String8 &key, String8 &val) = 0;
-    virtual int registControlCB(const sp<IIOTControlCB> &ctlCB) = 0;
+    virtual int registCommandCB(const sp<IIOTCommandCB> &ctlCB) = 0;
     virtual int registPropertyCB(const sp<IIOTPropertyCB> &proCB) = 0;
 };
 

@@ -22,6 +22,21 @@ static void __native_setup(JNIEnv *env, jobject thiz, jobject refObj)
     IOTClientJNI::get().init(env, clazz, refObj);
 }
 
+static void __native_commit(JNIEnv *env, jobject thiz)
+{
+    IOTClientJNI::get().commit();
+}
+
+static jint __native_followProperty(JNIEnv *env, jobject thiz, jstring property, jint type, jint size)
+{
+    return IOTClientJNI::get().followProperty(property, type, size);
+}
+
+static jint __native_followCommand(JNIEnv *env, jobject thiz, jstring cmd)
+{
+    return IOTClientJNI::get().followCommand(cmd);
+}
+
 static jint __native_reportEvent(JNIEnv *env, jobject thiz, jstring msg)
 {
     return IOTClientJNI::get().reportEvent(msg);
@@ -35,6 +50,17 @@ static jint __native_reportProperty(JNIEnv *env, jobject thiz, jstring key, jstr
 static JNINativeMethod gMethods[] = {
     { "native_init",            "()V",                            (void *)__native_init },
     { "native_setup",           "(Ljava/lang/Object;)V",          (void *)__native_setup },
+    { "native_commit",          "()V",                            (void *)__native_commit },
+    {
+        "native_followProperty",
+        "(Ljava/lang/String;II)I",
+        (void *)__native_followProperty
+    },
+    {
+        "native_followCommand",
+        "(Ljava/lang/String;)I",
+        (void *)__native_followCommand
+    },
     {
         "native_reportEvent",
         "(Ljava/lang/String;)I",

@@ -1,15 +1,15 @@
-#ifndef __IOT_ControlCB_H_
-#define __IOT_ControlCB_H_
+#ifndef __IOT_CommandCB_H_
+#define __IOT_CommandCB_H_
 
 #include <JNIHelp.h>
-#include "IIOTControlCB.h"
+#include "IIOTCommandCB.h"
 
 namespace android {
 
-class IOTControlCB : public BnIOTControlCB {
+class IOTCommandCB : public BnIOTCommandCB {
 public:
-    IOTControlCB(JNIEnv* env, jclass clazz, jobject thiz);
-    ~IOTControlCB();
+    IOTCommandCB(JNIEnv* env, jclass clazz, jobject thiz);
+    ~IOTCommandCB();
 protected:
     int callback(String8 const &msg) const;
 private:

@@ -1,5 +1,5 @@
 #include "IOT_ClientJNI.h"
-#include "IOT_ControlCB.h"
+#include "IOT_CommandCB.h"
 #include "IOT_PropertyCB.h"
 #include "IOT_Helper.h"
 
@@ -10,7 +10,7 @@ namespace android {
 ANDROID_SINGLETON_STATIC_INSTANCE(IOTClientJNI)
 
 IOTClientJNI::IOTClientJNI()
-    : m_controlCB(0), m_propertyCB(0), m_proxy(0), m_listen(0)
+    : m_commandCB(0), m_propertyCB(0), m_proxy(0), m_listen(0)
 {
 }
 
@@ -22,9 +22,15 @@ IOTClientJNI::~IOTClientJNI()
 
 int IOTClientJNI::init(JNIEnv* env, jclass clazz, jobject thiz)
 {
-    m_controlCB = new IOTControlCB(env, clazz, thiz);
+    m_commandCB = new IOTCommandCB(env, clazz, thiz);
     m_propertyCB = new IOTPropertyCB(env, clazz, thiz);
     return connect();
+}
+
+void IOTClientJNI::commit()
+{
+    m_proxy->registCommandCB(m_commandCB);
+    m_proxy->registPropertyCB(m_propertyCB);
 }
 
 int IOTClientJNI::connect()
@@ -60,10 +66,7 @@ int IOTClientJNI::connect()
     m_listen = new DeathObserver(*const_cast<IOTClientJNI *>(this));
     IInterface::asBinder(service)->linkToDeath(m_listen);
 
-    m_proxy = service->createClient();
-
-    m_proxy->registControlCB(m_controlCB);
-    m_proxy->registPropertyCB(m_propertyCB);
+    m_proxy = service->createClient(String8("todo"));
     return 0;
 }
 
@@ -74,6 +77,28 @@ void IOTClientJNI::serviceDied()
     int ret = connect();
     if (ret < 0)
         ALOGW("IOTClientJNI connect iot service fail!");
+}
+
+int IOTClientJNI::followProperty(jstring &jkey, jint type, jint size)
+{
+    if (m_proxy == NULL)
+        return -1;
+    String8 key = JStringToString8(jkey);
+    if (key.length() <= 0)
+        return -1;
+    ALOGI("followProperty(%s)", key.string());
+    return m_proxy->followProperty(key, type, size);
+}
+
+int IOTClientJNI::followCommand(jstring &jcmd)
+{
+    if (m_proxy == NULL)
+        return -1;
+    String8 cmd = JStringToString8(jcmd);
+    if (cmd.length() <= 0)
+        return -1;
+    ALOGI("followCommand(%s)", cmd.string());
+    return m_proxy->followCommand(cmd);
 }
 
 int IOTClientJNI::reportEvent(jstring const &jmsg)

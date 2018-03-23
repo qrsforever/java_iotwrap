@@ -1,21 +1,21 @@
-#ifndef __IIOTControlCB_H__
-#define __IIOTControlCB_H__
+#ifndef __IIOTCommandCB_H__
+#define __IIOTCommandCB_H__
 
 #include <binder/IInterface.h>
 #include <binder/Parcel.h>
 #include <utils/String8.h>
 
-#define IOT_CONTROL_PACK "com.android.leiot.IIOTControlCB"
+#define IOT_COMMAND_PACK "com.android.leiot.IIOTCommandCB"
 
 namespace android {
 
-class IIOTControlCB : public IInterface {
+class IIOTCommandCB : public IInterface {
 public:
-    DECLARE_META_INTERFACE(IOTControlCB);
+    DECLARE_META_INTERFACE(IOTCommandCB);
     virtual int callback(String8 const &msg) const = 0;
 };
 
-class BnIOTControlCB : public BnInterface<IIOTControlCB> {
+class BnIOTCommandCB : public BnInterface<IIOTCommandCB> {
 public:
     virtual status_t onTransact(uint32_t code,
                                 const Parcel &data,

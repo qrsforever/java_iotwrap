@@ -27,6 +27,7 @@ public:
 
     static inline DeviceShadow& get() { return getInstance(); } 
 
+    int doAddProperty(const char *name, int type, int size);
     int doReportEvent(const char* msg, size_t size);
     int doReportProperty(const char *key, const char *val);
 
@@ -50,7 +51,7 @@ private:
         sp<DeviceShadow> const m_service;
     };
 
-    int _addProperty(const char *name, void *data, int type, int mode, iotx_shadow_attr_cb_t cb);
+    int _addProperty(const char *name, int type, int size, iotx_shadow_attr_cb_t cb);
 
     class _DS_Attr {
     public:

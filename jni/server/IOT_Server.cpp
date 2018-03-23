@@ -4,6 +4,9 @@
 #include <binder/IServiceManager.h>
 #include <utils/Log.h>
 
+#include "utils/RefBase.h"
+#include <utils/Vector.h>
+
 using namespace android;
 
 int main(int , char**)

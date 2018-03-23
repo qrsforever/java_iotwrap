@@ -12,9 +12,10 @@ public:
     BpIOTService(const sp<IBinder>& impl)
         : BpInterface<IIOTService>(impl) { }
 
-    virtual sp<IIOTClient> createClient() {
+    virtual sp<IIOTClient> createClient(String8 name) {
         Parcel data, reply;                                                          
         data.writeInterfaceToken(IIOTService::getInterfaceDescriptor());        
+        data.writeString8(name);
         int status = remote()->transact(IOTACTION_CREATE_CLIENT, data, &reply);      
         if (status != 0) {
             ALOGW("remote call IOTACTION_CREATE_CLIENT error!\n");
@@ -33,7 +34,8 @@ status_t BnIOTService::onTransact(uint32_t code, const Parcel &data, Parcel *rep
     switch (code) {
     case IOTACTION_CREATE_CLIENT: {
             CHECK_INTERFACE(IIOTService, data, reply);              
-            sp<IBinder> b = IInterface::asBinder(createClient());
+            String8 name = data.readString8();
+            sp<IBinder> b = IInterface::asBinder(createClient(name));
             reply->writeStrongBinder(b);
         }
         break;
