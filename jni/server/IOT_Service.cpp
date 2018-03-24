@@ -121,7 +121,7 @@ int IOTService::callPropertySet(const char *key, const char *val)
     IterFollow it = m_keyFollow.find(key);
     if (it == m_keyFollow.end()) {
         /* TODO */
-        ALOGW("TODO callPropertySet, if no following, just using the first client.\n");
+        ALOGW("TODO callPropertySet(%s), if no following, just using the first client.\n", key);
         if (m_clients.size() > 0 && m_clients[0] != NULL) {
             if (m_clients[0]->m_property != NULL)
                 m_clients[0]->m_property->set(String8(key), String8(val));
@@ -222,7 +222,7 @@ int IOTService::addFollowing(int type, const char *val, const sp<IOTClient> &tar
     case FOLLOW_TYPE_COMMAND:
         {
             it = m_cmdFollow.find(val);
-            if (it != m_cmdFollow.end()) {
+            if (it == m_cmdFollow.end()) {
                 v_clients = new Vector<sp<IOTClient>>();
                 m_cmdFollow.insert(
                     std::pair<std::string, Vector<sp<IOTClient>>*>(val, v_clients));
@@ -230,7 +230,7 @@ int IOTService::addFollowing(int type, const char *val, const sp<IOTClient> &tar
                 v_clients = it->second;
         }
         break;
-        
+
     default:
         return -1;
     }
@@ -266,7 +266,7 @@ void IOTService::clientActive()
 }
 
 IOTService::IOTClient::IOTClient(const char *name, const sp<IOTService> &service)
-            : m_name(name), m_service(service), m_command(NULL), m_property(NULL) 
+            : m_name(name), m_service(service), m_command(NULL), m_property(NULL)
 {
 
 }
@@ -289,8 +289,8 @@ int IOTService::IOTClient::followProperty(String8 &key, int type, int size)
 
 int IOTService::IOTClient::followCommand(String8 &cmd)
 {
-    int ret;
-    ret = m_service->addFollowing((int)FOLLOW_TYPE_COMMAND, cmd.string(), this);
+    ALOGI("IOTService::IOTClient::followCommand run here\n");
+    int ret = m_service->addFollowing((int)FOLLOW_TYPE_COMMAND, cmd.string(), this);
     if (0 != ret)
         return -1;
     return 0;
@@ -298,16 +298,19 @@ int IOTService::IOTClient::followCommand(String8 &cmd)
 
 int IOTService::IOTClient::reportEvent(String8 &msg)
 {
+    ALOGI("IOTService::IOTClient::reportEvent run here\n");
     return m_service->doReportEvent(msg.string(), msg.length());
 }
 
 int IOTService::IOTClient::reportProperty(String8 &key, String8 &val)
 {
+    ALOGI("IOTService::IOTClient::reportProperty run here\n");
     return m_service->doReportProperty(key.string(), val.string());
 }
 
 int IOTService::IOTClient::registCommandCB(const sp<IIOTCommandCB> &cmdCB)
 {
+    ALOGI("IOTService::IOTClient::registCommandCB run here\n");
     if (m_command != NULL)
         return -1;
     m_command = cmdCB;
@@ -316,6 +319,7 @@ int IOTService::IOTClient::registCommandCB(const sp<IIOTCommandCB> &cmdCB)
 
 int IOTService::IOTClient::registPropertyCB(const sp<IIOTPropertyCB> &proCB)
 {
+    ALOGI("IOTService::IOTClient::registPropertyCB run here\n");
     if (m_property != NULL)
         return -1;
 

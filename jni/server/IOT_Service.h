@@ -7,11 +7,16 @@
 
 #include <utils/Vector.h>
 #include <utils/Mutex.h>
-#include <utils/Condition.h> 
+#include <utils/Condition.h>
 #include <string>
 #include <map>
 
 #define MAX_CLINETS 10
+
+/* TODO debug */
+#define ALOGI  printf
+#define ALOGW  printf
+#define ALOGE  printf
 
 enum {
     FOLLOW_TYPE_PROPERTY = 0,
@@ -42,7 +47,7 @@ protected:
     /* for parent class */
     void waitForClient();
     void clientActive();
-    Condition m_condition;  
+    Condition m_condition;
 
 private:
     class IOTClient : public BnIOTClient, public IBinder::DeathRecipient {

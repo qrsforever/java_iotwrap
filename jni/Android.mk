@@ -8,29 +8,29 @@ LOCAL_CFLAGS += -DENABLE_TENCENT_CLOUD
 LOCAL_CFLAGS += -DIOT_BUILDTIME=\"$(shell date +%Y%m%d%H%M%S)\"
 
 LOCAL_C_INCLUDES += $(LOCAL_PATH)/binder \
-					$(LOCAL_PATH)/server \
-					$(LOCAL_PATH)/sdk/include
+                    $(LOCAL_PATH)/server \
+                    $(LOCAL_PATH)/sdk/include
 
-LOCAL_SRC_FILES :=  \
-    server/IOT_Server.cpp \
-    server/IOT_Service.cpp \
-	server/IOT_DeviceShadow.cpp \
-	binder/IIOTService.cpp \
-	binder/IIOTClient.cpp \
-	binder/IIOTCommandCB.cpp \
-	binder/IIOTPropertyCB.cpp 
+LOCAL_SRC_FILES := server/IOT_Server.cpp \
+                   server/IOT_Service.cpp \
+                   server/IOT_DeviceShadow.cpp \
+                   binder/IIOTService.cpp \
+                   binder/IIOTClient.cpp \
+                   binder/IIOTCommandCB.cpp \
+                   binder/IIOTPropertyCB.cpp
 
 
 LOCAL_LDFLAGS += -L$(LOCAL_PATH)/sdk/lib -O2
-LOCAL_LDFLAGS +=  -lleiot_sdk \
-				  -lleiot_utils \
-				  -lleiot_platform \
-				  -lmbedtls \
-				  -lMQTTPacketClient \
+LOCAL_LDFLAGS += \
+                 -lleiot_sdk \
+                 -lleiot_utils \
+                 -lleiot_platform \
+                 -lmbedtls \
+                 -lMQTTPacketClient \
 
 LOCAL_SHARED_LIBRARIES := \
-    libandroid \
-    libbinder \
+	libandroid \
+	libbinder \
     libutils \
     libcutils \
     liblog
@@ -47,25 +47,25 @@ include $(CLEAR_VARS)
 LOCAL_CFLAGS := -DLOG_TAG=\"IOT_Client\"
 
 LOCAL_C_INCLUDES += $(LOCAL_PATH) \
-					$(LOCAL_PATH)/binder \
-					$(LOCAL_PATH)/client
+                    $(LOCAL_PATH)/binder \
+                    $(LOCAL_PATH)/client
 
 LOCAL_SRC_FILES:= \
-    binder/IIOTCommandCB.cpp \
+	binder/IIOTCommandCB.cpp \
 	binder/IIOTPropertyCB.cpp  \
     binder/IIOTService.cpp \
     binder/IIOTClient.cpp \
-	client/IOT_CommandCB.cpp \
-	client/IOT_PropertyCB.cpp \
+    client/IOT_CommandCB.cpp \
+    client/IOT_PropertyCB.cpp \
     client/IOT_ClientJNI.cpp \
-	client/IOT_Helper.cpp \
-	IOT_JNI.cpp
+    client/IOT_Helper.cpp \
+    IOT_JNI.cpp
 
 LOCAL_SHARED_LIBRARIES := \
     libandroid_runtime \
     libnativehelper \
     libbinder \
-	libutils \
+    libutils \
     libcutils \
     liblog
 

@@ -14,6 +14,7 @@ extern "C" {
 #define ATTR_VALUE_MAX_LEN 256
 #define PAYLOAD_MAX_LEN    2048
 #define YIELD_TIMEOUT_MS   200
+#define COMMAND_MAX_LEN    64
 
 namespace android {
 
@@ -25,7 +26,7 @@ private:
 public:
     ~DeviceShadow();
 
-    static inline DeviceShadow& get() { return getInstance(); } 
+    static inline DeviceShadow& get() { return getInstance(); }
 
     int doAddProperty(const char *name, int type, int size);
     int doReportEvent(const char* msg, size_t size);
@@ -36,6 +37,8 @@ public:
     int postShadow();
     int yieldShadow(int timeout_ms);
 
+    uint32_t getReportPeriod() { return m_reportPeriod; }
+    void setReportReriod(uint32_t t) { m_reportPeriod = t; }
     int loadProperties();
     int pushProperties();
 
@@ -51,7 +54,7 @@ private:
         sp<DeviceShadow> const m_service;
     };
 
-    int _addProperty(const char *name, int type, int size, iotx_shadow_attr_cb_t cb);
+    iotx_shadow_attr_pt _addProperty(const char *name, int type, int size, iotx_shadow_attr_cb_t cb);
 
     class _DS_Attr {
     public:
@@ -62,6 +65,8 @@ private:
 
     typedef std::map<std::string, struct _DS_Attr>::iterator IterAttrs_t;
     std::map<std::string, struct _DS_Attr> m_iotAttrs;
+    bool m_reportFlag;
+    uint32_t m_reportPeriod; /* unit: ms */
     void* m_shadow;
     sp<IOTThread> m_thread;
     mutable Mutex m_lockAttrs;
