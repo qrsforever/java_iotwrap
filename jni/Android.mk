@@ -74,3 +74,22 @@ LOCAL_CFLAGS += -Wall # -Werror -Wno-error=deprecated-declarations -Wunused -Wun
 LOCAL_MODULE:= libiotclient_jni
 
 include $(BUILD_SHARED_LIBRARY)
+
+include $(CLEAR_VARS)
+
+include $(CLEAR_VARS)                              
+LOCAL_MODULE       := testshadow_cert.crt
+LOCAL_MODULE_TAGS  := optional
+LOCAL_MODULE_CLASS := ETC
+LOCAL_MODULE_PATH  := $(TARGET_OUT_ETC)/certs
+LOCAL_SRC_FILES    := sdk/certs/testshadow_cert.crt
+include $(BUILD_PREBUILT)
+
+include $(CLEAR_VARS)                              
+LOCAL_MODULE       := testshadow_private.key
+LOCAL_MODULE_TAGS  := optional
+LOCAL_MODULE_CLASS := ETC
+LOCAL_MODULE_PATH  := $(TARGET_OUT_ETC)/certs
+LOCAL_SRC_FILES    := sdk/certs/testshadow_private.key
+include $(BUILD_PREBUILT)
+

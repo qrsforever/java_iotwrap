@@ -71,9 +71,9 @@ private:
     typedef std::map<std::string, struct _DS_Attr>::iterator IterAttrs_t;
     std::map<std::string, struct _DS_Attr> m_iotAttrs;
     bool m_reportFlag;
-    uint32_t m_reportPeriod; /* unit: ms */
     void* m_shadow;
     sp<IOTThread> m_thread;
+    uint32_t m_reportPeriod; /* unit: ms */
     mutable Mutex m_lockAttrs;
 };
 

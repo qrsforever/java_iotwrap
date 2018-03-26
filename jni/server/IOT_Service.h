@@ -14,10 +14,12 @@
 #define MAX_CLINETS 10
 
 /* TODO debug */
+#if 0
 #define ALOGI  printf
 #define ALOGW  printf
 #define ALOGE  printf
-#define Track() printf("------ %s %d ------\n", __func__, __LINE__)
+#define Track() ALOGI("------ %s %d ------\n", __func__, __LINE__)
+#endif
 
 enum {
     FOLLOW_TYPE_PROPERTY = 0,
@@ -32,7 +34,7 @@ public:
     ~IOTService ();
 
     /* TODO support add property dynamicly */
-    virtual int doAddProperty(const char *name, int type, int size) {return -1;}
+    virtual int doAddProperty(const char * /*name*/, int /*ltype*/, int /*size*/) {return -1;}
     virtual int doReportEvent(const char *msg, size_t size) = 0;
     virtual int doReportProperty(const char *key, const char *val) = 0;
 

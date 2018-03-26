@@ -9,6 +9,7 @@
 #define PRODUCT_KEY                 "38GBCH2FO2"
 #define DEVICE_NAME                 "testshadow"
 #define DEVICE_SECRET               "123456"
+#define CERTS_PATH                  "/system/etc/certs"
 static char sg_cert_file[128];
 static char sg_key_file[128];
 
@@ -51,13 +52,13 @@ static void _DS_report_period_property_cb(iotx_shadow_attr_pt pattr)
     android::DeviceShadow::get().updateReportReriod(*(int32_t*)pattr->pattr_data);
 }/*}}}*/
 
-static void _DS_call_default_command_cb(void* handle, const char *data, size_t data_len)
+static void _DS_call_default_command_cb(void * /*handle*/, const char *data, size_t /*data_len*/)
 {  /*{{{*/
-#define COMMAND_TOKEN "command"
+#define COMMAND_TOKEN "\"command\""
 
     SHADOW_TRACE(" _DS_call_default_command_cb (%s)", data);
     /* TODO easy impl */
-    const char *ptr = strstr(data, "\""COMMAND_TOKEN"\"");
+    const char *ptr = strstr(data, COMMAND_TOKEN);
     const char *p1 = strchr(ptr, ':');
     const char *p2 = strchr(p1, ',');
     if (!p1 || !p2) {
@@ -339,8 +340,8 @@ int DeviceShadow::setupShadow(char *w_buff, char *r_buff)
 
     memset(&shadow_para, 0, sizeof(iotx_shadow_para_t));
 
-    sprintf(sg_cert_file, "/data/certs/%s_cert.crt", DEVICE_NAME);
-    sprintf(sg_key_file, "/data/certs/%s_private.key", DEVICE_NAME);
+    sprintf(sg_cert_file, "%s/%s_cert.crt", CERTS_PATH, DEVICE_NAME);
+    sprintf(sg_key_file, "%s/%s_private.key", CERTS_PATH, DEVICE_NAME);
     shadow_para.mqtt.cert_file = sg_cert_file;
     shadow_para.mqtt.key_file = sg_key_file;
 
