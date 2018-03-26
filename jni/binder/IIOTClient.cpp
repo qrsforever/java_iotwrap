@@ -25,7 +25,7 @@ public:
         data.writeInt32(size);
         int status = remote()->transact(IOTACTION_FOLLOW_PROPERTY, data, &reply);
         if (status != 0) {
-            ALOGW("remote call IOTACTION_REPORT_EVENT error!\n");
+            ALOGW("remote call IOTACTION_FOLLOW_PROPERTY error!\n");
             return status;
         }
         return reply.readInt32();
@@ -37,7 +37,7 @@ public:
         data.writeString8(cmd);
         int status = remote()->transact(IOTACTION_FOLLOW_COMMAND, data, &reply);
         if (status != 0) {
-            ALOGW("remote call IOTACTION_REPORT_EVENT error!\n");
+            ALOGW("remote call IOTACTION_FOLLOW_COMMAND error!\n");
             return status;
         }
         return reply.readInt32();

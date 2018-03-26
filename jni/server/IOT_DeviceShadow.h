@@ -29,17 +29,19 @@ public:
     static inline DeviceShadow& get() { return getInstance(); }
 
     int doAddProperty(const char *name, int type, int size);
-    int doReportEvent(const char* msg, size_t size);
+    int doReportEvent(const char *msg, size_t size);
     int doReportProperty(const char *key, const char *val);
+    int getServiceStatus();
 
     int setupShadow(char *w_buff, char *r_buff);
     int preShadow();
     int postShadow();
     int yieldShadow(int timeout_ms);
 
-    uint32_t getReportPeriod() { return m_reportPeriod; }
-    void setReportReriod(uint32_t t) { m_reportPeriod = t; }
-    int loadProperties();
+    uint32_t reportPeriod() { return m_reportPeriod; }
+    void updateReportReriod(uint32_t t);
+
+    int updateProperties();
     int pushProperties();
 
     void start() { m_thread->run("DeviceShadow"); }
@@ -54,12 +56,15 @@ private:
         sp<DeviceShadow> const m_service;
     };
 
-    iotx_shadow_attr_pt _addProperty(const char *name, int type, int size, iotx_shadow_attr_cb_t cb);
+    iotx_shadow_attr_pt _newProperty(const char *name, int type, int size, iotx_shadow_attr_cb_t cb);
+    void _delProperty(iotx_shadow_attr_pt attr);
+    iotx_shadow_attr_pt _addProperty(const char *name, int type, int size, iotx_shadow_attr_cb_t cb, bool islocal);
 
-    class _DS_Attr {
-    public:
-        _DS_Attr(int flag, iotx_shadow_attr_pt a): report(flag), attr(a) {}
+    struct _DS_Attr {
+        _DS_Attr(int flag, bool local, iotx_shadow_attr_pt a)
+            : report(flag), isLocal(local), attr(a) {}
         int report;
+        bool isLocal;
         iotx_shadow_attr_pt attr;
     };
 

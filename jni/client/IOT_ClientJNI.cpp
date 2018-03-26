@@ -16,8 +16,15 @@ IOTClientJNI::IOTClientJNI()
 
 IOTClientJNI::~IOTClientJNI()
 {
+    /* never run here */
     m_proxy.clear();
     m_listen.clear();
+    for (size_t i = 0; i < m_propertyList.size(); ++i)
+        delete m_propertyList[i];
+    for (size_t i = 0; i < m_commandList.size(); ++i)
+        delete m_commandList[i];
+    m_propertyList.clear();
+    m_commandList.clear();
 }
 
 int IOTClientJNI::init(JNIEnv* env, jclass clazz, jobject thiz, jstring &clientID)
@@ -25,48 +32,102 @@ int IOTClientJNI::init(JNIEnv* env, jclass clazz, jobject thiz, jstring &clientI
     m_clientID = JStringToString8(clientID);
     m_propertyCB = new IOTPropertyCB(env, clazz, thiz);
     m_commandCB = new IOTCommandCB(env, clazz, thiz);
-    return 0;
+    return ERR_NOERROR;
 }
 
 int IOTClientJNI::connService()
 {
     if (m_proxy != NULL) {
         ALOGW(" Already connect!\n");
-        return 0;
+        return ERR_NOERROR;
     }
     return connect();
 }
 
+int IOTClientJNI::reconnService()
+{
+    if (m_proxy != NULL) {
+        ALOGW(" Already connect!\n");
+        return ERR_NOERROR;
+    }
+
+    int ret = connect();
+    if (ret < 0) {
+        ALOGW("IOTClientJNI connect iot service fail!");
+        return ret;
+    }
+
+    /* for reset follow property and command to iot server */
+    return postFollow();
+}
+
 int IOTClientJNI::postFollow()
 {
+    int ret = -1;
     if (m_proxy == NULL) {
         ALOGE(" Client proxy is null.\n");
-        return -1;
+        return ERR_PROXY_NULL;
     }
+
+    {
+        Mutex::Autolock _l(m_lockPropertyList);
+        for (size_t i = 0; i < m_propertyList.size(); ++i) {
+            String8 &key = m_propertyList[i]->_key;
+            int type = m_propertyList[i]->_type;
+            int size = m_propertyList[i]->_size;
+            ret = m_proxy->followProperty(key, type, size);
+            if (ret < 0) {
+                ALOGW(" proxy->followProperty(%s,%d,%d) is error!.\n", key.string(), type, size);
+            }
+        }
+    }
+
+    {
+        Mutex::Autolock _l(m_lockCommandList);
+        for (size_t i = 0; i < m_commandList.size(); ++i) {
+            String8 &cmd = m_commandList[i]->_cmd;
+            m_proxy->followCommand(cmd);
+            if (ret < 0) {
+                ALOGW(" proxy->followCommand(%s) is error!.\n", cmd.string());
+            }
+        }
+    }
+
+    Mutex::Autolock _l(m_lockProxy);
+    /* must put it after proxy->followxxx() */
     m_proxy->registCommandCB(m_commandCB);
     m_proxy->registPropertyCB(m_propertyCB);
-    return 0;
+
+    return ERR_NOERROR;
 }
 
 int IOTClientJNI::connect()
 {
     sp<IServiceManager> sm = defaultServiceManager();
     sp<IBinder> binder;
+    sp<IIOTService> service = NULL;
+    int status = DS_STATUS_INVALID;
 
-    /* wait iot service start, try 5 times */
-    for (int i = 0; i < 5; ++i) {
-        binder = sm->getService(String16(IOT_SERVICE_NAME));
-        if(binder == 0) {
-            usleep(200000);
-            continue;
+    /* wait iot service start, try n times */
+    for (int i = 0; i < TRY_CONNECT_SERVICE_CNT; ++i) {
+        if (service == NULL) {
+            binder = sm->getService(String16(IOT_SERVICE_NAME));
+            if(binder == 0) {
+                usleep(200000);
+                continue;
+            }
+            service = interface_cast<IIOTService>(binder);
         }
-        break;
+        status = service->getServiceStatus();
+        if (status == DS_STATUS_CONNECTED)
+            break;
+        usleep(200000);
+        continue;
     }
-    if(binder == NULL) {
-        ALOGE("sm->getService(%s) error!\n", IOT_SERVICE_NAME);
-        return -1;
+    if(status != DS_STATUS_CONNECTED) {
+        ALOGE("getService(%s) or getStatus(%d) error!\n", IOT_SERVICE_NAME, status);
+        return ERR_PROXY_NULL;
     }
-    sp<IIOTService> service = interface_cast<IIOTService>(binder);
 
     /* iot service die, call serviceDied for reconnect */
     class DeathObserver : public IBinder::DeathRecipient {
@@ -81,63 +142,82 @@ int IOTClientJNI::connect()
     m_listen = new DeathObserver(*const_cast<IOTClientJNI *>(this));
     IInterface::asBinder(service)->linkToDeath(m_listen);
 
+    Mutex::Autolock _l(m_lockProxy);
     m_proxy = service->createClient(m_clientID);
-    return m_proxy == NULL ? -1 : 0;
+    ALOGI("create Client [%p]\n", m_proxy.get());
+    return m_proxy == NULL ? ERR_PROXY_NULL : ERR_NOERROR;
 }
 
 void IOTClientJNI::serviceDied()
 {
     m_proxy.clear();
     m_listen.clear();
-    int ret = connect();
-    if (ret < 0)
-        ALOGW("IOTClientJNI connect iot service fail!");
+    m_proxy = 0;
+    m_listen = 0;
+    reconnService();
 }
 
 int IOTClientJNI::followProperty(jstring &jkey, jint type, jint size)
 {
-    if (m_proxy == NULL)
-        return -1;
     String8 key = JStringToString8(jkey);
     if (key.length() <= 0)
-        return -1;
+        return ERR_PARAM_INVALID;
     ALOGI("followProperty(%s)", key.string());
-    return m_proxy->followProperty(key, type, size);
+    Mutex::Autolock _l(m_lockPropertyList);
+    for (size_t i = 0; i < m_propertyList.size(); ++i) {
+        if (m_propertyList[i]->isKeyEqual(key)) {
+            ALOGW("Already add followProperty(%s)", key.string());
+            return ERR_PARAM_INVALID;
+        }
+    }
+    m_propertyList.add(new _PropertyInfo(key, type, size));
+    return ERR_NOERROR;
 }
 
 int IOTClientJNI::followCommand(jstring &jcmd)
 {
-    if (m_proxy == NULL)
-        return -1;
     String8 cmd = JStringToString8(jcmd);
     if (cmd.length() <= 0)
         return -1;
     ALOGI("followCommand(%s)", cmd.string());
-    return m_proxy->followCommand(cmd);
+    Mutex::Autolock _l(m_lockCommandList);
+    for (size_t i = 0; i < m_commandList.size(); ++i) {
+        if (m_commandList[i]->isCmdEqual(cmd)) {
+            ALOGW("Already add followCommand(%s)", cmd.string());
+            return ERR_PARAM_INVALID;
+        }
+    }
+    m_commandList.add(new _CommandInfo(cmd));
+    return ERR_NOERROR;
 }
 
 int IOTClientJNI::reportEvent(jstring const &jmsg)
 {
     if (m_proxy == NULL)
-        return -1;
+        return ERR_PROXY_NULL;
+
     String8 msg = JStringToString8(jmsg);
     if (msg.length() <= 0)
-        return -1;
+        return ERR_PARAM_INVALID;
     ALOGI("reportEvent(%s)", msg.string());
+
+    Mutex::Autolock _l(m_lockProxy);
     return m_proxy->reportEvent(msg);
 }
 
 int IOTClientJNI::reportProperty(jstring const &jkey, jstring const &jval)
 {
     if (m_proxy == NULL)
-        return -1;
+        return ERR_PROXY_NULL;
+
     String8 key = JStringToString8(jkey);
     if (key.length() <= 0)
-        return -1;
+        return ERR_PARAM_INVALID;
     String8 val = JStringToString8(jval);
     if (val.length() <= 0)
-        return -1;
+        return ERR_PARAM_INVALID;
     ALOGI("reportProperty(%s, %s", key.string(), val.string());
+    Mutex::Autolock _l(m_lockProxy);
     return m_proxy->reportProperty(key, val);
 }
 

@@ -21,6 +21,7 @@ static char sg_key_file[128];
         HAL_Printf("%s", "\r\n"); \
     } while(0)
 
+
 extern "C" {
 
 static void _DS_call_default_property_cb(iotx_shadow_attr_pt pattr)
@@ -47,7 +48,7 @@ static void _DS_report_period_property_cb(iotx_shadow_attr_pt pattr)
 {/*{{{*/
     SHADOW_TRACE("setProperty(%s %d)", pattr->pattr_name, *(int32_t*)pattr->pattr_data);
 
-    android::DeviceShadow::get().setReportReriod(*(int32_t*)pattr->pattr_data);
+    android::DeviceShadow::get().updateReportReriod(*(int32_t*)pattr->pattr_data);
 }/*}}}*/
 
 static void _DS_call_default_command_cb(void* handle, const char *data, size_t data_len)
@@ -88,22 +89,19 @@ static void _DS_call_default_command_cb(void* handle, const char *data, size_t d
 
 }
 
+#define LOCAL_ATTR_REPROT_PERIOD "report_period"
+
 namespace android {
 
     ANDROID_SINGLETON_STATIC_INSTANCE(DeviceShadow);
 
 DeviceShadow::DeviceShadow()
-    : m_shadow(0), m_thread(0), m_reportPeriod(300000)
+    : m_shadow(0), m_thread(0), m_reportPeriod(20000)
 {/*{{{*/
     m_thread = new IOTThread(this);
 
-    // static add property
-    _addProperty("report_period", IOTX_SHADOW_INT32, sizeof(int32_t), _DS_report_period_property_cb);
-#if 0
-    _addProperty("power",      IOTX_SHADOW_INT32, sizeof(int32_t), _DS_call_default_property_cb);
-    _addProperty("brightness", IOTX_SHADOW_INT32, sizeof(int32_t), _DS_call_default_property_cb);
-    _addProperty("signal",     IOTX_SHADOW_INT32, sizeof(int32_t), _DS_call_default_property_cb);
-#endif
+    // static add native property
+    _addProperty(LOCAL_ATTR_REPROT_PERIOD, IOTX_SHADOW_INT32, sizeof(int32_t), _DS_report_period_property_cb, true);
 }/*}}}*/
 
 DeviceShadow::~DeviceShadow()
@@ -111,22 +109,30 @@ DeviceShadow::~DeviceShadow()
     m_thread.clear();
     Mutex::Autolock _l(m_lockAttrs);
     IterAttrs_t it = m_iotAttrs.begin();
-    for (; it != m_iotAttrs.end(); ++it) {
-        iotx_shadow_attr_pt attr = it->second.attr;
-        if (attr) {
-            if (attr->pattr_name)
-                free((void*)attr->pattr_name);
-            if (attr->pattr_data)
-                free((void*)attr->pattr_data);
-            free(attr);
-        }
-    }
+    for (; it != m_iotAttrs.end(); ++it)
+        _delProperty(it->second.attr);
     m_iotAttrs.clear();
+}/*}}}*/
+
+int DeviceShadow::getServiceStatus()
+{/*{{{*/
+    /* TODO should get real status, need sdk provide api */
+    if (m_shadow == NULL)
+        return DS_STATUS_INVALID;
+    return DS_STATUS_CONNECTED;
+}/*}}}*/
+
+void DeviceShadow::updateReportReriod(uint32_t t)
+{/*{{{*/
+    IterAttrs_t it = m_iotAttrs.find(LOCAL_ATTR_REPROT_PERIOD);
+    if (it != m_iotAttrs.end()) {
+        m_reportPeriod = t;
+        it->second.report = 1;
+    }
 }/*}}}*/
 
 int DeviceShadow::doAddProperty(const char *name, int type, int size)
 {/*{{{*/
-    SHADOW_TRACE("run here");
     if (!name || size <= 0)
         return -1;
 
@@ -141,18 +147,17 @@ int DeviceShadow::doAddProperty(const char *name, int type, int size)
     default:
         return -1;
     }
-
-   iotx_shadow_attr_pt attr = _addProperty(name, iot_type, size, _DS_call_default_property_cb);
-   if (attr) {
-       IOT_Shadow_RegisterAttribute(m_shadow, attr);
-       SHADOW_TRACE("Register attr[%s]", attr->pattr_name);
-   }
-   return 0;
+    iotx_shadow_attr_pt attr = _addProperty(name, iot_type, size, _DS_call_default_property_cb, false);
+    /* TODO if iot server already started, a new client add property, need add it to shadow */
+    if (attr && m_shadow) {
+        SHADOW_TRACE("Register attr[%s]", attr->pattr_name);
+        IOT_Shadow_RegisterAttribute(m_shadow, attr);
+    }
+    return 0;
 }/*}}}*/
 
 int DeviceShadow::doReportEvent(const char* msg, size_t size)
 {/*{{{*/
-    SHADOW_TRACE("run here");
     if (!msg || size == 0)
         return -1;
     return IOT_Shadow_Event_Report(m_shadow, (char*)msg, size);
@@ -160,7 +165,6 @@ int DeviceShadow::doReportEvent(const char* msg, size_t size)
 
 int DeviceShadow::doReportProperty(const char *key, const char *val)
 {/*{{{*/
-    SHADOW_TRACE("run here");
     if (!key || !val)
         return -1;
     Mutex::Autolock _l(m_lockAttrs);
@@ -186,19 +190,8 @@ int DeviceShadow::doReportProperty(const char *key, const char *val)
     return 0;
 }/*}}}*/
 
-iotx_shadow_attr_pt DeviceShadow::_addProperty(const char *name, int type, int size, iotx_shadow_attr_cb_t cb)
+iotx_shadow_attr_pt DeviceShadow::_newProperty(const char *name, int type, int size, iotx_shadow_attr_cb_t cb)
 {/*{{{*/
-    SHADOW_TRACE("run here");
-    Mutex::Autolock _l(m_lockAttrs);
-
-    IterAttrs_t it = m_iotAttrs.find(name);
-    if (it != m_iotAttrs.end()) {
-        SHADOW_TRACE("already name[%s] type[%d vs %d] size[%d]\n", name, type, it->second.attr->attr_type, size);
-        if (type != it->second.attr->attr_type)
-            SHADOW_TRACE("Warning: type diff!");
-        return NULL;
-    }
-
     iotx_shadow_attr_pt attr = (iotx_shadow_attr_pt)calloc(1, sizeof(iotx_shadow_attr_t));
     if (!attr)
         return NULL;
@@ -216,19 +209,48 @@ iotx_shadow_attr_pt DeviceShadow::_addProperty(const char *name, int type, int s
     attr->mode = cb ? IOTX_SHADOW_RW : IOTX_SHADOW_READONLY;
     attr->callback = cb;
 
-    m_iotAttrs.insert(std::pair<std::string, _DS_Attr>(name, _DS_Attr(1, attr)));
     return attr;
 }/*}}}*/
 
-int DeviceShadow::loadProperties()
+void DeviceShadow::_delProperty(iotx_shadow_attr_pt attr)
 {/*{{{*/
-    SHADOW_TRACE("run here");
+    if (attr) {
+        if (attr->pattr_name)
+            free((void*)attr->pattr_name);
+        if (attr->pattr_data)
+            free((void*)attr->pattr_data);
+        free(attr);
+    }
+}/*}}}*/
+
+iotx_shadow_attr_pt DeviceShadow::_addProperty(const char *name, int type, int size, iotx_shadow_attr_cb_t cb, bool isLocal)
+{/*{{{*/
+    Mutex::Autolock _l(m_lockAttrs);
+
+    IterAttrs_t it = m_iotAttrs.find(name);
+    if (it != m_iotAttrs.end()) {
+        SHADOW_TRACE("already name[%s] type[%d vs %d] size[%d]\n", name, type, it->second.attr->attr_type, size);
+        if (type != it->second.attr->attr_type)
+            SHADOW_TRACE("Warning: type diff!");
+        return NULL;
+    }
+
+    iotx_shadow_attr_pt attr = _newProperty(name, type, size, cb);
+    if (attr)
+        m_iotAttrs.insert(std::pair<std::string, _DS_Attr>(name, _DS_Attr(0, isLocal, attr)));
+    return attr;
+}/*}}}*/
+
+int DeviceShadow::updateProperties()
+{/*{{{*/
     Mutex::Autolock _l(m_lockAttrs);
 
     int ret = -1;
     IterAttrs_t it;
     for (it = m_iotAttrs.begin(); it != m_iotAttrs.end(); ++it) {
         _DS_Attr &ds_attr = it->second;
+        if (ds_attr.isLocal)
+            continue;
         iotx_shadow_attr_pt attr = ds_attr.attr;
         if (attr) {
             switch(attr->attr_type) {
@@ -278,7 +300,6 @@ int DeviceShadow::pushProperties()
     if (!m_reportFlag)
         return 0;
 
-    SHADOW_TRACE("run here");
     int ret = 0, flg = 0;
     static char s_buff[PAYLOAD_MAX_LEN] = { 0 };
     format_data_t format;
@@ -352,10 +373,11 @@ int DeviceShadow::setupShadow(char *w_buff, char *r_buff)
 
 int DeviceShadow::preShadow()
 {/*{{{*/
-    SHADOW_TRACE("run here");
     /* 1. wait the first client create */
+
     waitForClient();
 
+    Mutex::Autolock _l(m_lockAttrs);
     /* 2. register attrs to iotsdk */
     IterAttrs_t it;
     for (it = m_iotAttrs.begin(); it != m_iotAttrs.end(); ++it) {
@@ -376,7 +398,7 @@ int DeviceShadow::preShadow()
 
 int DeviceShadow::postShadow()
 {/*{{{*/
-    SHADOW_TRACE("run here");
+    Mutex::Autolock _l(m_lockAttrs);
     /* 1. delete attrs from qcloud */
     IterAttrs_t it;
     for (it = m_iotAttrs.begin(); it != m_iotAttrs.end(); ++it) {
@@ -418,8 +440,8 @@ bool DeviceShadow::IOTThread::threadLoop()
     started_ms = HAL_UptimeMs();
     do {
         m_service->yieldShadow(YIELD_TIMEOUT_MS);
-        if (started_ms + m_service->getReportPeriod() > HAL_UptimeMs()) {
-            m_service->loadProperties();
+        if (m_service->reportPeriod() < (HAL_UptimeMs() - started_ms)) {
+            m_service->updateProperties();
             started_ms = HAL_UptimeMs();
         }
         m_service->pushProperties();

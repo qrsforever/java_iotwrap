@@ -21,6 +21,7 @@ abstract public class DeviceShadow {
     private native final void native_setup(Object refobj, String clientID);
 
     protected native int native_connService();
+    protected native int native_reconnService();
     protected native int native_postFollow();
     protected native int native_followProperty(String key, int type, int size);
     protected native int native_followCommand(String cmd);

@@ -17,6 +17,7 @@
 #define ALOGI  printf
 #define ALOGW  printf
 #define ALOGE  printf
+#define Track() printf("------ %s %d ------\n", __func__, __LINE__)
 
 enum {
     FOLLOW_TYPE_PROPERTY = 0,
@@ -42,6 +43,7 @@ public:
 protected:
     /* Interfaces of IIOTService */
     sp<IIOTClient> createClient(String8 name);
+    virtual int getServiceStatus() { return DS_STATUS_INVALID; }
 
     int removeClient(const sp<IIOTClient> &client);
     /* for parent class */

@@ -27,6 +27,11 @@ static jint __native_connService(JNIEnv *env, jobject thiz)
     return IOTClientJNI::get().connService();
 }
 
+static jint __native_reconnService(JNIEnv *env, jobject thiz)
+{
+    return IOTClientJNI::get().reconnService();
+}
+
 static jint __native_postFollow(JNIEnv *env, jobject thiz)
 {
     return IOTClientJNI::get().postFollow();
@@ -67,6 +72,11 @@ static JNINativeMethod gMethods[] = {
         "native_connService",
         "()I",
         (void *)__native_connService
+    },
+    {
+        "native_reconnService",
+        "()I",
+        (void *)__native_reconnService
     },
     {
         "native_postFollow",

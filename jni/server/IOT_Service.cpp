@@ -69,6 +69,7 @@ int IOTService::callPropertyGet(const char *key, char *val, size_t size)
 
     Mutex::Autolock _l(m_lockClis);
 
+    ALOGI("callPropertyGet(%s)\n", key);
     size_t len = 0;
     String8 str;
     IterFollow it = m_keyFollow.find(key);
@@ -234,7 +235,6 @@ int IOTService::addFollowing(int type, const char *val, const sp<IOTClient> &tar
     default:
         return -1;
     }
-
     if (!v_clients)
         return -1;
 
