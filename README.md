@@ -10,9 +10,11 @@ categories: [ Local ]
 <!-- vim-markdown-toc GFM -->
 
 * [代码调试](#代码调试)
-    * [下载及编译](#下载及编译)
+    * [代码下载](#代码下载)
     * [目录结构介绍](#目录结构介绍)
+    * [编译](#编译)
     * [调试](#调试)
+    * [IOT服务](#iot服务)
 
 <!-- vim-markdown-toc -->
 
@@ -22,11 +24,14 @@ categories: [ Local ]
 代码调试
 ========
 
-下载及编译
-----------
+代码下载
+--------
 地址:`http://athena.devops.letv.com/#/admin/projects/smarthome/LeIOT`
-编译: Android环境下`mm`
-位置:`vendor/letv/frameworks/LeIOT`
+
+TV项目
+分支: `x450_debug_iot_20180323`
+位置: `vendor/letv/frameworks/LeIOT`
+
 
 目录结构介绍
 -----------
@@ -52,6 +57,16 @@ categories: [ Local ]
                                 `-- DeviceShadow.java
 ```
 
+编译
+----
+*Java版本:java-1.7.0-openjdk-amd64*
+```bash
+source build/envsetup.sh
+lunch (cibn, aosp_mangosteen_xxx-userdebug)
+cd vendor/letv/frameworks/LeIOT
+mm
+```
+
 调试
 ----
 
@@ -61,11 +76,37 @@ adb connect 10.58.83.7
 adb root
 adb connect 10.58.83.7
 adb remount
-adb push $TOP/out/target/product/almond/system/framework/leiot.jar /system/framework/
-adb push $TOP/out/target/product/almond/system/lib/libiotclient_jni.so /system/lib 
-adb push $TOP/out/target/product/almond/system/lib64/libiotclient_jni.so /system/lib64
+adb push $TOP/out/target/product/mangosteen/system/framework/leiot.jar /system/framework/
+adb push $TOP/out/target/product/mangosteen/system/lib/libiotclient_jni.so /system/lib
+adb push $TOP/out/target/product/mangosteen/system/lib64/libiotclient_jni.so /system/lib64
+adb push $TOP/out/target/product/mangosteen/system/lib/libiot_binder.so /system/lib
+adb push $TOP/out/target/product/mangosteen/system/lib64/libiot_binder.so /system/lib64
 adb push $TOP/out/target/product/mangosteen/symbols/system/bin/iot_server /system/bin/
 
+adb shell logcat -c; adb shell logcat | grep -i "iot"
 ```
-dex转化为jar
-`0jdecode.sh $TOP/out/target/common/obj/JAVA_LIBRARIES/leiot_intermediates/classes.dex`
+dex转化为jar, 可供App使用jar包
+```
+0jdecode.sh $TOP/out/target/common/obj/JAVA_LIBRARIES/leiot_intermediates/classes.dex
+如果$TOP/out/target/common/obj/JAVA_LIBRARIES/leiot_intermediates/classes.jar存在, 可以不用执行
+```
+
+IOT服务
+-------
+
+1. 由init.rc启动, 服务死掉后会自动重启`restart`, 目前没有给该服务root权限
+
+```
+    service iot_server /system/bin/iot_server
+        class main
+        restart
+```
+
+2. 可以使用ctl.stop停止该服务, 这种情况下服务不会自动重启, 启动需要执行ctl.start
+
+```bash
+    $ setprop ctl.stop  iot_server
+    $ setprop ctl.start iot_server
+```
+
+3. Sepolicy并没有设置, userdebug模式下并没有影响, 后续会加上.

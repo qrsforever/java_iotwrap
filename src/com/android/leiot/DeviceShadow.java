@@ -7,7 +7,6 @@ import java.lang.ref.WeakReference;
 abstract public class DeviceShadow {
     private static final String TAG = "DeviceShadow";
 
-
     public static final int IOT_PROPERTY_NULL   = 0;
     public static final int IOT_PROPERTY_INT32  = 1;
     public static final int IOT_PROPERTY_STRING = 2;
@@ -20,9 +19,7 @@ abstract public class DeviceShadow {
     private static native final void native_init();
     private native final void native_setup(Object refobj, String clientID);
 
-    protected native int native_connService();
-    protected native int native_reconnService();
-    protected native int native_postFollow();
+    protected native int native_connService(int timeout_ms);
     protected native int native_followProperty(String key, int type, int size);
     protected native int native_followCommand(String cmd);
     protected native int native_reportEvent(String msg);
@@ -33,30 +30,27 @@ abstract public class DeviceShadow {
         native_setup(new WeakReference<DeviceShadow>(this), clientID);
     }
 
-    protected int iotConnService() {
-        return native_connService();
+    public int iotConnService(int timeout_ms) {
+        Log.d(TAG, " iotConnService(" + timeout_ms + ")");
+        return native_connService(timeout_ms);
     }
 
-    protected int iotPostFollow() {
-        return native_postFollow();
-    }
-
-    protected int iotFollowProperty(String key, int type, int size) {
+    public int iotFollowProperty(String key, int type, int size) {
         Log.d(TAG, " iotFollowProperty(" + key + ", " + type + ", " + size + ")");
         return native_followProperty(key, type, size);
     }
 
-    protected int iotFollowCommand(String cmd) {
+    public int iotFollowCommand(String cmd) {
         Log.d(TAG, " iotFollowCommand(" + cmd + ")");
         return native_followCommand(cmd);
     }
 
-    protected int iotReportEvent(String msg) {
+    public int iotReportEvent(String msg) {
         Log.d(TAG, " iotReportEvent(" + msg + ")");
         return native_reportEvent(msg);
     }
 
-    protected int iotReportProperty(String key, String val) {
+    public int iotReportProperty(String key, String val) {
         return native_reportProperty(key, val);
     }
 

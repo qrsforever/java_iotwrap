@@ -22,19 +22,9 @@ static void __native_setup(JNIEnv *env, jobject thiz, jobject refObj, jstring cl
     IOTClientJNI::get().init(env, clazz, refObj, clientID);
 }
 
-static jint __native_connService(JNIEnv *env, jobject thiz)
+static jint __native_connService(JNIEnv *env, jobject thiz, jint timeout_ms)
 {
-    return IOTClientJNI::get().connService();
-}
-
-static jint __native_reconnService(JNIEnv *env, jobject thiz)
-{
-    return IOTClientJNI::get().reconnService();
-}
-
-static jint __native_postFollow(JNIEnv *env, jobject thiz)
-{
-    return IOTClientJNI::get().postFollow();
+    return IOTClientJNI::get().connService(timeout_ms);
 }
 
 static jint __native_followProperty(JNIEnv *env, jobject thiz, jstring property, jint type, jint size)
@@ -70,18 +60,8 @@ static JNINativeMethod gMethods[] = {
     },
     {
         "native_connService",
-        "()I",
+        "(I)I",
         (void *)__native_connService
-    },
-    {
-        "native_reconnService",
-        "()I",
-        (void *)__native_reconnService
-    },
-    {
-        "native_postFollow",
-        "()I",
-        (void *)__native_postFollow
     },
     {
         "native_followProperty",

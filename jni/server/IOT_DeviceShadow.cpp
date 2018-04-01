@@ -15,6 +15,12 @@ static char sg_key_file[128];
 
 #define SHADOW_MQTT_MSGLEN      (2048)
 
+#define AVOID_QCLOUD_BUG
+
+#ifdef AVOID_QCLOUD_BUG
+static bool g_forceReport = false;
+#endif
+
 #define SHADOW_TRACE(fmt, ...)  \
     do { \
         HAL_Printf("%s|%03d :: ", __func__, __LINE__); \
@@ -22,13 +28,12 @@ static char sg_key_file[128];
         HAL_Printf("%s", "\r\n"); \
     } while(0)
 
+#define TRACE() HAL_Printf("%s|%03d :: iot", __func__, __LINE__);
 
 extern "C" {
 
 static void _DS_call_default_property_cb(iotx_shadow_attr_pt pattr)
 {/*{{{*/
-    SHADOW_TRACE("setProperty(%s,%s)", pattr->pattr_name, pattr->pattr_data);
-
     char value[ATTR_VALUE_MAX_LEN];
     switch(pattr->attr_type) {
     case IOTX_SHADOW_INT32:
@@ -42,12 +47,21 @@ static void _DS_call_default_property_cb(iotx_shadow_attr_pt pattr)
         return;
     }
 
+#ifdef AVOID_QCLOUD_BUG
+    g_forceReport = true;
+#endif
+
+    SHADOW_TRACE("setProperty(%s,%s)", pattr->pattr_name, value);
     android::DeviceShadow::get().callPropertySet(pattr->pattr_name, value);
 }/*}}}*/
 
 static void _DS_report_period_property_cb(iotx_shadow_attr_pt pattr)
 {/*{{{*/
     SHADOW_TRACE("setProperty(%s %d)", pattr->pattr_name, *(int32_t*)pattr->pattr_data);
+
+#ifdef AVOID_QCLOUD_BUG
+    g_forceReport = true;
+#endif
 
     android::DeviceShadow::get().updateReportReriod(*(int32_t*)pattr->pattr_data);
 }/*}}}*/
@@ -59,9 +73,19 @@ static void _DS_call_default_command_cb(void * /*handle*/, const char *data, siz
     SHADOW_TRACE(" _DS_call_default_command_cb (%s)", data);
     /* TODO easy impl */
     const char *ptr = strstr(data, COMMAND_TOKEN);
+    if (!ptr) {
+        SHADOW_TRACE("Command format error!");
+        return;
+    }
+
     const char *p1 = strchr(ptr, ':');
+    if (!p1) {
+        SHADOW_TRACE("Command format error!");
+        return;
+    }
+
     const char *p2 = strchr(p1, ',');
-    if (!p1 || !p2) {
+    if (!p2) {
         SHADOW_TRACE("Command format error!");
         return;
     }
@@ -103,6 +127,7 @@ DeviceShadow::DeviceShadow()
 
     // static add native property
     _addProperty(LOCAL_ATTR_REPROT_PERIOD, IOTX_SHADOW_INT32, sizeof(int32_t), _DS_report_period_property_cb, true);
+
 }/*}}}*/
 
 DeviceShadow::~DeviceShadow()
@@ -168,26 +193,45 @@ int DeviceShadow::doReportProperty(const char *key, const char *val)
 {/*{{{*/
     if (!key || !val)
         return -1;
-    Mutex::Autolock _l(m_lockAttrs);
 
-    IterAttrs_t it = m_iotAttrs.find(key);
-    if (it == m_iotAttrs.end())
-        return -1;
+    iotx_shadow_attr_pt attr = NULL;
+    IterAttrs_t it;
+    {
+        Mutex::Autolock _l(m_lockAttrs);
+        it = m_iotAttrs.find(key);
+        if (it == m_iotAttrs.end())
+            return -1;
 
-    it->second.report = 1;
-    m_reportFlag = true;
-    iotx_shadow_attr_pt attr = it->second.attr;
-    switch(attr->attr_type) {
-    case IOTX_SHADOW_INT32:
-        *(int32_t*)attr->pattr_data = atoi(val);
-        break;
+        it->second.report = 1;
+        attr = it->second.attr;
+        switch(attr->attr_type) {
+        case IOTX_SHADOW_INT32:
+            *(int32_t*)attr->pattr_data = atoi(val);
+            break;
 
-    case IOTX_SHADOW_STRING:
-        strncpy((char*)attr->pattr_data, val, strlen(val));
-        break;
-    default:
-        ;
+        case IOTX_SHADOW_STRING:
+            strncpy((char*)attr->pattr_data, val, strlen(val));
+            break;
+        default:
+            return -1;
+        }
     }
+    m_reportFlag = true;
+
+    /* for urgent property report */
+    if (m_shadow) {
+        format_data_t format;
+        char s_buff[PAYLOAD_MAX_LEN] = { 0 };
+        IOT_Shadow_PushFormat_Init(m_shadow, &format, s_buff, PAYLOAD_MAX_LEN);
+        IOT_Shadow_PushFormat_Add(m_shadow, &format, attr);
+        IOT_Shadow_PushFormat_Finalize(m_shadow, &format);
+        int ret = IOT_Shadow_Push(m_shadow, format.buf, format.offset, YIELD_TIMEOUT_MS);
+        if (ret == 0)
+            it->second.report = 0;
+        else
+            SHADOW_TRACE("Urgent report ret = %d\n", ret);
+    }
+
     return 0;
 }/*}}}*/
 
@@ -297,31 +341,44 @@ int DeviceShadow::updateProperties()
 
 int DeviceShadow::pushProperties()
 {/*{{{*/
-    Mutex::Autolock _l(m_lockAttrs);
-    if (!m_reportFlag)
-        return 0;
+    if (!m_reportFlag) {
+#ifdef AVOID_QCLOUD_BUG
+        if (!g_forceReport)
+#endif
+            return 0;
+    }
 
     int ret = 0, flg = 0;
     static char s_buff[PAYLOAD_MAX_LEN] = { 0 };
     format_data_t format;
 
     IterAttrs_t it;
-    for (it = m_iotAttrs.begin(); it != m_iotAttrs.end(); ++it) {
-        _DS_Attr &ds_attr = it->second;
-        if (ds_attr.report) {
-            if (0 == flg) {
-                 IOT_Shadow_PushFormat_Init(m_shadow, &format, s_buff, PAYLOAD_MAX_LEN);
-                 flg = 1;
+    {
+        Mutex::Autolock _l(m_lockAttrs);
+        for (it = m_iotAttrs.begin(); it != m_iotAttrs.end(); ++it) {
+            _DS_Attr &ds_attr = it->second;
+#ifdef AVOID_QCLOUD_BUG
+            if (g_forceReport || ds_attr.report) {
+#else
+                if (ds_attr.report) {
+#endif
+                    if (0 == flg) {
+                        IOT_Shadow_PushFormat_Init(m_shadow, &format, s_buff, PAYLOAD_MAX_LEN);
+                        flg = 1;
+                    }
+                    IOT_Shadow_PushFormat_Add(m_shadow, &format, ds_attr.attr);
+                    ds_attr.report = 0;
+                }
             }
-            IOT_Shadow_PushFormat_Add(m_shadow, &format, ds_attr.attr);
-            ds_attr.report = 0;
-        }
     }
     if (1 == flg) {
         IOT_Shadow_PushFormat_Finalize(m_shadow, &format);
         ret = IOT_Shadow_Push(m_shadow, format.buf, format.offset, YIELD_TIMEOUT_MS);
     }
     m_reportFlag = false;
+#ifdef AVOID_QCLOUD_BUG
+    g_forceReport = false;
+#endif
     return ret;
 }/*}}}*/
 
@@ -363,11 +420,15 @@ int DeviceShadow::setupShadow(char *w_buff, char *r_buff)
     shadow_para.mqtt.handle_event.h_fp = NULL;
     shadow_para.mqtt.handle_event.pcontext = NULL;
 
-    h_shadow = IOT_Shadow_Construct(&shadow_para);
-    if (NULL == h_shadow) {
+    /* TODO */
+    do {
+        h_shadow = IOT_Shadow_Construct(&shadow_para);
+        if (NULL != h_shadow)
+            break;
         SHADOW_TRACE("construct device shadow failed!");
-        return rc;
-    }
+        HAL_SleepMs(5000);
+    } while (1);
+
     m_shadow = h_shadow;
     return 0;
 }/*}}}*/
@@ -378,14 +439,16 @@ int DeviceShadow::preShadow()
 
     waitForClient();
 
-    Mutex::Autolock _l(m_lockAttrs);
     /* 2. register attrs to iotsdk */
-    IterAttrs_t it;
-    for (it = m_iotAttrs.begin(); it != m_iotAttrs.end(); ++it) {
-        _DS_Attr &ds_attr = it->second;
-        if (ds_attr.attr) {
-            IOT_Shadow_RegisterAttribute(m_shadow, ds_attr.attr);
-            SHADOW_TRACE("Register attr[%s]", ds_attr.attr->pattr_name);
+    {
+        Mutex::Autolock _l(m_lockAttrs);
+        IterAttrs_t it;
+        for (it = m_iotAttrs.begin(); it != m_iotAttrs.end(); ++it) {
+            _DS_Attr &ds_attr = it->second;
+            if (ds_attr.attr) {
+                IOT_Shadow_RegisterAttribute(m_shadow, ds_attr.attr);
+                SHADOW_TRACE("Register attr[%s]", ds_attr.attr->pattr_name);
+            }
         }
     }
 
@@ -399,14 +462,16 @@ int DeviceShadow::preShadow()
 
 int DeviceShadow::postShadow()
 {/*{{{*/
-    Mutex::Autolock _l(m_lockAttrs);
     /* 1. delete attrs from qcloud */
-    IterAttrs_t it;
-    for (it = m_iotAttrs.begin(); it != m_iotAttrs.end(); ++it) {
-        _DS_Attr &ds_attr = it->second;
-        if (ds_attr.attr) {
-            SHADOW_TRACE("Delete attr[%s]", ds_attr.attr->pattr_name);
-            IOT_Shadow_DeleteAttribute(m_shadow, ds_attr.attr);
+    {
+        Mutex::Autolock _l(m_lockAttrs);
+        IterAttrs_t it;
+        for (it = m_iotAttrs.begin(); it != m_iotAttrs.end(); ++it) {
+            _DS_Attr &ds_attr = it->second;
+            if (ds_attr.attr) {
+                SHADOW_TRACE("Delete attr[%s]", ds_attr.attr->pattr_name);
+                IOT_Shadow_DeleteAttribute(m_shadow, ds_attr.attr);
+            }
         }
     }
 
@@ -431,11 +496,8 @@ bool DeviceShadow::IOTThread::threadLoop()
     char *w_buff = (char *)HAL_Malloc(SHADOW_MQTT_MSGLEN);
     char *r_buff = (char *)HAL_Malloc(SHADOW_MQTT_MSGLEN);
 
-    ret = m_service->setupShadow(w_buff, r_buff);
-    if (ret < 0) {
-        SHADOW_TRACE("error!");
-        goto END;
-    }
+    m_service->setupShadow(w_buff, r_buff);
+
     m_service->preShadow();
 
     started_ms = HAL_UptimeMs();

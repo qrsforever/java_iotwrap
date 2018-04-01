@@ -35,33 +35,24 @@ int IOTClientJNI::init(JNIEnv* env, jclass clazz, jobject thiz, jstring &clientI
     return ERR_NOERROR;
 }
 
-int IOTClientJNI::connService()
-{
-    if (m_proxy != NULL) {
-        ALOGW(" Already connect!\n");
-        return ERR_NOERROR;
-    }
-    return connect();
-}
-
-int IOTClientJNI::reconnService()
+int IOTClientJNI::connService(jint timeout_ms)
 {
     if (m_proxy != NULL) {
         ALOGW(" Already connect!\n");
         return ERR_NOERROR;
     }
 
-    int ret = connect();
+    int ret = _connect(timeout_ms);
     if (ret < 0) {
         ALOGW("IOTClientJNI connect iot service fail!");
         return ret;
     }
 
-    /* for reset follow property and command to iot server */
-    return postFollow();
+    /* set follow property and command to iot server */
+    return _postFollow();
 }
 
-int IOTClientJNI::postFollow()
+int IOTClientJNI::_postFollow()
 {
     int ret = -1;
     if (m_proxy == NULL) {
@@ -101,7 +92,7 @@ int IOTClientJNI::postFollow()
     return ERR_NOERROR;
 }
 
-int IOTClientJNI::connect()
+int IOTClientJNI::_connect(jint timeout_ms)
 {
     sp<IServiceManager> sm = defaultServiceManager();
     sp<IBinder> binder;
@@ -109,11 +100,12 @@ int IOTClientJNI::connect()
     int status = DS_STATUS_INVALID;
 
     /* wait iot service start, try n times */
-    for (int i = 0; i < TRY_CONNECT_SERVICE_CNT; ++i) {
+    const int tryCnt = timeout_ms * 1000 / USLEEP_TIME + 1;
+    for (int i = 0; i < tryCnt; ++i) {
         if (service == NULL) {
             binder = sm->getService(String16(IOT_SERVICE_NAME));
             if(binder == 0) {
-                usleep(200000);
+                usleep(USLEEP_TIME);
                 continue;
             }
             service = interface_cast<IIOTService>(binder);
@@ -152,9 +144,10 @@ void IOTClientJNI::serviceDied()
 {
     m_proxy.clear();
     m_listen.clear();
-    m_proxy = 0;
-    m_listen = 0;
-    reconnService();
+    m_proxy = NULL;
+    m_listen = NULL;
+    int ret = connService(USLEEP_TIME * 60);
+    ALOGI("Auto connect service result:%d\n", ret);
 }
 
 int IOTClientJNI::followProperty(jstring &jkey, jint type, jint size)
@@ -216,7 +209,7 @@ int IOTClientJNI::reportProperty(jstring const &jkey, jstring const &jval)
     String8 val = JStringToString8(jval);
     if (val.length() <= 0)
         return ERR_PARAM_INVALID;
-    ALOGI("reportProperty(%s, %s", key.string(), val.string());
+    ALOGI("reportProperty(%s, %s)", key.string(), val.string());
     Mutex::Autolock _l(m_lockProxy);
     return m_proxy->reportProperty(key, val);
 }

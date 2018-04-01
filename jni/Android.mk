@@ -1,5 +1,26 @@
-# Build iot server
 LOCAL_PATH:= $(call my-dir)
+
+# Build iot binder.so
+include $(CLEAR_VARS)
+LOCAL_CFLAGS := -DLOG_TAG=\"IOT_Binder\"
+LOCAL_C_INCLUDES += $(LOCAL_PATH)/binder
+LOCAL_SRC_FILES := \
+               binder/IIOTService.cpp \
+               binder/IIOTClient.cpp \
+               binder/IIOTCommandCB.cpp \
+               binder/IIOTPropertyCB.cpp
+
+LOCAL_SHARED_LIBRARIES := libbinder \
+                   libutils \
+                   liblog
+
+LOCAL_MODULE_TAGS := optional
+
+LOCAL_MODULE := libiot_binder
+
+include $(BUILD_SHARED_LIBRARY)
+
+# Build iot server
 include $(CLEAR_VARS)
 
 LOCAL_CFLAGS := -DLOG_TAG=\"IOT_Server\"
@@ -11,29 +32,27 @@ LOCAL_C_INCLUDES += $(LOCAL_PATH)/binder \
                     $(LOCAL_PATH)/server \
                     $(LOCAL_PATH)/sdk/include
 
-LOCAL_SRC_FILES := server/IOT_Server.cpp \
-                   server/IOT_Service.cpp \
-                   server/IOT_DeviceShadow.cpp \
-                   binder/IIOTService.cpp \
-                   binder/IIOTClient.cpp \
-                   binder/IIOTCommandCB.cpp \
-                   binder/IIOTPropertyCB.cpp
+LOCAL_SRC_FILES := \
+              server/IOT_Server.cpp \
+              server/IOT_Service.cpp \
+              server/IOT_DeviceShadow.cpp
 
 
 LOCAL_LDFLAGS += -L$(LOCAL_PATH)/sdk/lib -O2
 LOCAL_LDFLAGS += \
-                 -lleiot_sdk \
-                 -lleiot_utils \
-                 -lleiot_platform \
-                 -lmbedtls \
-                 -lMQTTPacketClient \
+             -lleiot_sdk \
+             -lleiot_utils \
+             -lleiot_platform \
+             -lmbedtls \
+             -lMQTTPacketClient \
 
 LOCAL_SHARED_LIBRARIES := \
-	libandroid \
-	libbinder \
-    libutils \
-    libcutils \
-    liblog
+             libandroid \
+             libbinder \
+             libutils \
+             libcutils \
+             liblog \
+             libiot_binder
 
 LOCAL_MODULE_TAGS := optional
 
@@ -51,23 +70,20 @@ LOCAL_C_INCLUDES += $(LOCAL_PATH) \
                     $(LOCAL_PATH)/client
 
 LOCAL_SRC_FILES:= \
-	binder/IIOTCommandCB.cpp \
-	binder/IIOTPropertyCB.cpp  \
-    binder/IIOTService.cpp \
-    binder/IIOTClient.cpp \
-    client/IOT_CommandCB.cpp \
-    client/IOT_PropertyCB.cpp \
-    client/IOT_ClientJNI.cpp \
-    client/IOT_Helper.cpp \
-    IOT_JNI.cpp
+             client/IOT_CommandCB.cpp \
+             client/IOT_PropertyCB.cpp \
+             client/IOT_ClientJNI.cpp \
+             client/IOT_Helper.cpp \
+             IOT_JNI.cpp
 
 LOCAL_SHARED_LIBRARIES := \
-    libandroid_runtime \
-    libnativehelper \
-    libbinder \
-    libutils \
-    libcutils \
-    liblog
+             libandroid_runtime \
+             libnativehelper \
+             libbinder \
+             libutils \
+             libcutils \
+             liblog \
+             libiot_binder
 
 LOCAL_CFLAGS += -Wall # -Werror -Wno-error=deprecated-declarations -Wunused -Wunreachable-code
 
@@ -77,7 +93,7 @@ include $(BUILD_SHARED_LIBRARY)
 
 include $(CLEAR_VARS)
 
-include $(CLEAR_VARS)                              
+include $(CLEAR_VARS)
 LOCAL_MODULE       := testshadow_cert.crt
 LOCAL_MODULE_TAGS  := optional
 LOCAL_MODULE_CLASS := ETC
@@ -85,11 +101,10 @@ LOCAL_MODULE_PATH  := $(TARGET_OUT_ETC)/certs
 LOCAL_SRC_FILES    := sdk/certs/testshadow_cert.crt
 include $(BUILD_PREBUILT)
 
-include $(CLEAR_VARS)                              
+include $(CLEAR_VARS)
 LOCAL_MODULE       := testshadow_private.key
 LOCAL_MODULE_TAGS  := optional
 LOCAL_MODULE_CLASS := ETC
 LOCAL_MODULE_PATH  := $(TARGET_OUT_ETC)/certs
 LOCAL_SRC_FILES    := sdk/certs/testshadow_private.key
 include $(BUILD_PREBUILT)
-

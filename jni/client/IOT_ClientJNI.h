@@ -15,7 +15,7 @@ enum {
     ERR_PARAM_INVALID = -2,
 };
 
-#define TRY_CONNECT_SERVICE_CNT 20
+#define USLEEP_TIME 100000
 
 namespace android {
 
@@ -24,7 +24,8 @@ private:
     friend class Singleton<IOTClientJNI>;
     IOTClientJNI();
 
-    int connect();
+    int _connect(jint timeout_ms);
+    int _postFollow();
     void serviceDied();
 
 public:
@@ -32,9 +33,7 @@ public:
     static inline IOTClientJNI& get() { return getInstance(); }
 
     int init(JNIEnv* env, jclass clazz, jobject thiz, jstring &clientID);
-    int connService();
-    int reconnService();
-    int postFollow();
+    int connService(jint timeout_ms);
 
     int followProperty(jstring &jkey, jint type, jint size);
     int followCommand(jstring &cmd);

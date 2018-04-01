@@ -138,7 +138,7 @@ int IOTService::callPropertySet(const char *key, const char *val)
         if ((*v_clients)[i]->m_property == NULL)
             continue;
 
-        ALOGI("m_property(%s %s)\n", key, val);
+        ALOGI("set_property(%s %s)\n", key, val);
         (*v_clients)[i]->m_property->set(String8(key), String8(val));
     }
     return 0;
